@@ -26,88 +26,11 @@ POST https://your-api-endpoint.com/jupiter/rfq/swap
 
 If you require an API key to access your endpoints, please provide it to us during the registration process. The API Key will be passed to the webhook as a header `X-API-KEY`.
 
-### POST /quote Request Response Format
+## Api Documentation
 
-We will send a POST request to the /quote endpoint with the following payload:
+REST API  documentation is provided in OpenAPI format. You can find the documentation [here](./openapi/openapi.json).
 
-```js
-POST /quote
-Content-Type: application/json
-
-{
-   "requestId": "string", -- UUIDv4
-   "quoteId": "string", // UUIDv4
-   "tokenIn": "string", // PublicKey
-   "amount": "string",
-   "tokenOut": "string", // PublicKey
-   "quoteType": "string", // Literal: 'ExactIn' or 'ExactOut'
-   "protocol": "string", // Literal: Protocol enum value
-   "taker": "string | null", // Optional PublicKey
-   "suggestedPrioritizationFees": "number | null" // Optional u64
-}
-```
-
-And will expect a response within **500ms** with the following payload:
-
-```js
-200 OK
-Content-Type: application/json
-
-{
-    "requestId": "string", // UUIDv4
-    "quoteId": "string", // UUIDv4
-    "tokenIn": "string", // PublicKey
-    "tokenOut": "string", // PublicKey
-    "quoteType": "string", // Literal: 'ExactIn' or 'ExactOut'
-    "protocol": "string", // Literal: Protocol enum value
-    "amountOut": "string",
-    "amountIn": "string",
-    "maker": "string",
-    "prioritizationFeeToUse": "number | null",
-    "taker": "string | null" // Optional PublicKey
-}
-```
-
-### POST /swap Request Response Format
-
-We will send a POST request to the /swap endpoint with the following payload:
-
-```js
-POST /quote
-Content-Type: application/json
-
-{
-   "requestId": "string", // UUIDv4
-   "quoteId": "string", // UUIDv4
-   "transaction": "string" // Base64 encoded versioned transaction not base58
-}
-```
-
-And will expect a response within **500ms** with the following payload:
-
-```js
-200 OK
-Content-Type: application/json
-
-{
-    "quoteId": "string", // UUIDv4
-    "state": "string", // "accepted",
-    "txSignature": "string | null" // null if state != "accepted"
-}
-```
-
-For any reasons that the MM have to bail the quotationa, you should reply the swap with
-
-```js
-200 OK
-Content-Type: application/json
-
-{
-    "quoteId": "string", // UUIDv4
-    "state": "string", // "rejected"
-    "rejectionReason": "string | null", // This field is optional.
-}
-```
+TODO
 
 ## Webhook Error Responses
 

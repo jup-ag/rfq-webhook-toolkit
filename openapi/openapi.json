@@ -18,8 +18,8 @@
             "name": "X-API-KEY",
             "in": "header",
             "description": "Optional API Key (if required by the webhook)",
-            "required": true,
-            "schema": { "type": "string" }
+            "required": false,
+            "schema": { "type": ["string", "null"] }
           }
         ],
         "requestBody": {
