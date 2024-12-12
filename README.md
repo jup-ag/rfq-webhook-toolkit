@@ -30,12 +30,12 @@ If you require an API key to access your endpoints, please provide it to us duri
 
 We will send a POST request to the /quote endpoint with the following payload:
 
-```http
+```js
 POST /quote
 Content-Type: application/json
 
 {
-   "requestId": "string", // UUIDv4
+   "requestId": "string", -- UUIDv4
    "quoteId": "string", // UUIDv4
    "tokenIn": "string", // PublicKey
    "amount": "string",
@@ -49,7 +49,7 @@ Content-Type: application/json
 
 And will expect a response within **500ms** with the following payload:
 
-```http
+```js
 200 OK
 Content-Type: application/json
 
@@ -72,7 +72,7 @@ Content-Type: application/json
 
 We will send a POST request to the /swap endpoint with the following payload:
 
-```http
+```js
 POST /quote
 Content-Type: application/json
 
@@ -85,7 +85,7 @@ Content-Type: application/json
 
 And will expect a response within **500ms** with the following payload:
 
-```http
+```js
 200 OK
 Content-Type: application/json
 
@@ -98,7 +98,7 @@ Content-Type: application/json
 
 For any reasons that the MM have to bail the quotationa, you should reply the swap with
 
-```http
+```js
 200 OK
 Content-Type: application/json
 
@@ -131,7 +131,7 @@ This is when the market maker is unable to fulfill the request due to internal i
 
 Response format for errors should be:
 
-```json
+```js
 {
   "message": "string" // A descriptive error message
 }
@@ -139,7 +139,7 @@ Response format for errors should be:
 
 Example error response:
 
-```http
+```js
 403 Forbidden
 Content-Type: application/json
 
