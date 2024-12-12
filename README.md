@@ -1,6 +1,7 @@
 # RFQ Webhook Toolkit
 
-:exclamation: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration.
+:mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. [Open an issue](https://github.com/jup-ag/rfq-webhook-toolkit/issues/new) for any feedback or questions.
+
 
 ## Market Maker Integration Guidelines
 
