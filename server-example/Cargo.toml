@@ -1,0 +1,37 @@
+[package]
+name = "server-example"
+version = "0.1.0"
+edition = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-std = { workspace = true, features = ["attributes", "tokio1"] }
+axum = { workspace = true }
+axum-extra = { workspace = true }
+bytes = { workspace = true, features = ["serde"] }
+chrono = { workspace = true, features = ["now"] }
+clap = { workspace = true, features = ["cargo", "derive", "env"] }
+futures = { workspace = true }
+reqwest = { workspace = true, features = ["native-tls-vendored", "json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true, features = [
+    "cors",
+    "trace",
+    "propagate-header",
+    "timeout",
+    "request-id"
+] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+uuid = { workspace = true, features = ["v4"] }
+webhook-api = { path = "../webhook-api" }
+utoipa = { workspace = true, features = ["axum_extras", "debug"] }
+utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+utoipa-axum = { workspace = true, features = ["debug"] }
+solana-sdk = { workspace = true }
+dotenvy = { workspace = true }
+utoipauto = { workspace = true }
