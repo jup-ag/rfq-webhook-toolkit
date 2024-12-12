@@ -38,9 +38,7 @@ make run-server-example
 
 and open the following URL in your browser: [http://localhost:8080/swagger-ui/](http://localhost:8080/swagger-ui/)
 
-TODO
-
-## Webhook Error Responses
+### Webhook Error Responses
 
 Market Makers should return appropriate HTTP status codes along with error messages. The following status codes are supported:
 
@@ -60,24 +58,6 @@ This is when the market maker is unable to fulfill the request due to internal i
 - `500 Internal Server Error`: When an unexpected error occurs on the market maker's side
 - `503 Service Unavailable`: When the market maker service is temporarily unavailable
 
-Response format for errors should be:
-
-```js
-{
-  "message": "string" // A descriptive error message
-}
-```
-
-Example error response:
-
-```js
-403 Forbidden
-Content-Type: application/json
-
-{
-    "message": "Quote size exceeds maximum allowed amount"
-}
-```
 
 ## Expiry information
 
