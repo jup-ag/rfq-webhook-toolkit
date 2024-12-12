@@ -1,0 +1,20 @@
+{
+  "devDependencies": {
+    "@types/node": "^22.9.1",
+    "@vitest/ui": "2.1.5",
+    "axios": "^1.7.7",
+    "chai": "^5.1.2",
+    "msw": "^2.6.5",
+    "solana-bankrun": "^0.4.0",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  },
+  "scripts": {
+    "acceptance": "vitest run ./suites/acceptance"
+  },
+  "dependencies": {
+    "bn.js": "^5.2.1"
+  }
+}

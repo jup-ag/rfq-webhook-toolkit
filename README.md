@@ -58,6 +58,28 @@ This is when the market maker is unable to fulfill the request due to internal i
 - `500 Internal Server Error`: When an unexpected error occurs on the market maker's side
 - `503 Service Unavailable`: When the market maker service is temporarily unavailable
 
+## Acceptance tests
+
+We have provided a set of acceptance tests that you can run to verify that your implementation is correct. The tests can be found in the [`acceptance`](./tests/suites/acceptance/) directory.
+
+To run the tests, you will need to have a recent nodejs version, pnpm and vitest installed. To run the tests, after installing the dependencies, run the following command:
+
+```bash
+make prepare-acceptance-tests
+```
+
+and then run the tests with:
+
+```bash
+WEBHOOK_URL=<your_webhook_url> make run-acceptance-tests
+```
+
+for an example, you can run the tests against the sample server:
+
+```bash
+make run-acceptance-tests-against-sample-server
+```
+
 
 ## Expiry information
 
