@@ -133,7 +133,7 @@ We enforce a fixed expiry timing flow for all quotes and transactions:
 1. When creating a quote, we set transaction expiry to **55 seconds** from creation time
 2. On the frontend:
    - If remaining time before expiry is less than **40 seconds** when user needs to sign, we will automatically requote
-   - The frontend will also do a requote every 5s
+   - The frontend will also do a requote every **15s**
 3. On the backend:
    - If remaining time before expiry is less than **25 seconds** when our /swap endpoint receives the request, we will reject the swap before forwarding to market makers
 
