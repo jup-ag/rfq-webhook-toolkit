@@ -18,7 +18,7 @@ use axum::{
     extract::{rejection::JsonRejection, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use axum_extra::extract::WithRejection;
@@ -105,6 +105,7 @@ async fn example_quote(
 ) -> Result<Json<QuoteResponse>, ApiError> {
     tracing::info!("Received quote request: {:?}", quote_request);
 
+    // The normal flow of a quote request would be:
     // Step 1: Parse the request
     // Step 2: Compute the quote
     // Step 3: Build the quote response
@@ -151,12 +152,35 @@ async fn example_swap(
     // Step 3: Send the transaction
     // Step 4: Build the swap response with the tx signature
 
-    Ok(Json(SwapResponse {
-        tx_signature: Some("3HMNN9enUZnjj2eV3vBB8j3RWtmq1iSpXniRd4Ly41vjx7PoAUjAcRz1Cz2FX8YZBkPnj2Lzew2YFPcSkkbp85Xj".to_string()),
-        quote_id: quote_request.quote_id.clone(),
-        state: SwapState::Accepted,
-        rejection_reason: None,
-    }))
+    // For testing purposes on this implementation  we leverage ad-hoc request_id to trigger errors
+
+    const SIMULATE_REJECTION: &str = "00000000-0000-0000-0000-000000000001";
+    const SIMULATE_MALFORMED: &str = "00000000-0000-0000-0000-000000000002";
+
+    match quote_request.request_id.as_str() {
+        SIMULATE_REJECTION =>
+            Ok(Json(SwapResponse {
+                tx_signature: None,
+                quote_id: quote_request.quote_id.clone(),
+                state: SwapState::Rejected,
+                rejection_reason: Some("<rejection reason>".to_string()),
+            }))
+        ,
+        SIMULATE_MALFORMED =>
+            Err(ApiError::BadRequest("Malformed request".to_string())),
+        _ => {
+            Ok(Json(SwapResponse {
+                tx_signature: Some("3HMNN9enUZnjj2eV3vBB8j3RWtmq1iSpXniRd4Ly41vjx7PoAUjAcRz1Cz2FX8YZBkPnj2Lzew2YFPcSkkbp85Xj".to_string()),
+                quote_id: quote_request.quote_id.clone(),
+                state: SwapState::Accepted,
+                rejection_reason: None,
+            }))
+        }
+    }
+}
+
+async fn get_health() -> Result<(), ApiError> {
+    Ok(())
 }
 
 async fn not_found_handler() -> ApiError {
@@ -173,6 +197,8 @@ pub fn app(config: Arc<Config>) -> Router {
     let router = Router::new()
         .route("/quote", post(example_quote))
         .route("/swap", post(example_swap))
+        // not part of RFQ spec, but useful for debugging
+        .route("/health", get(get_health))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .fallback(not_found_handler)
         .with_state(config);

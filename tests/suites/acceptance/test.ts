@@ -43,8 +43,6 @@ describe('Webhook API Quote', () => {
 
 
   it('should return a successful swap response', async () => {
-
-
     const url = `${WEBHOOK_URL}/swap`;
     console.log('request url: ', url);
 
@@ -65,8 +63,35 @@ describe('Webhook API Quote', () => {
     expect(response.data.state).toBe("accepted");
     expect(response.data.txSignature.length).toBe(SIGNATURE_LENGTH);
     // TODO verify the signature
+  });
+
+  it('it should simulate a swap rejection', async () => {
+
+
+    const url = `${WEBHOOK_URL}/swap`;
+    console.log('request url: ', url);
+
+    const payload = {
+      quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
+      requestId: "00000000-0000-0000-0000-000000000001", // special requestId to simulate rejection
+      transaction: "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAIABgxSnEehNb4kLTrfnzoVcTu/GPLBwP0kKZRTJowyLvHxxSdkl7oLuGWRcrcu3Yxm4Y9WF2TZyGphCjp+D3nAuvnbWolfQZ0Kl+9/uOLLKVXoXu/o/NQI5LY9pgx8ibLVfztqKpSdlIRAyuBnIsFa1A93abdI4AmIcbFLGFGatrhAXnMzpil7FnByGEuo10mEgCYqn/QfD1DTR6idALqAu9Bhh6NTL/nu9FDLsM2mMKzzPPKY2nBeuUHR7ibnmbqVw/MAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABpuIV/6rgYT7aH9jRhjANdrEOdwa6ztVmKDwAAAAAAEG3fbh12Whk9nL4UbO63msHLSF7V9bN5E6jPWFfv8AqUpYSftyo7vpH9xbDmpX9jxaHLRbIGem7Qys02OVyKECxvp6877brTo9ZfNqq8l0MbG75MLS9uDkfKYCA0UvXWE9f/tHi80zsUphEh9edGz8h7JFCM8ITLeBpkq6CPTyfQMHAAkDmLEBAAAAAAAHAAUCwFwVAAoMAQACAwoFCwkICQYEIKhgt6NcCiigAMqaOwAAAAAm/0kBAQAAAEAvW2cAAAAAAA=="
+    };
+
+    const response = await axios.post(url, payload);
+
+    console.log("response --> ", response.data);
+
+    expect(response.status).toBe(200);
+    expect(response.data.quoteId).toBe(payload.quoteId);
+    expect(response.data.state).toBe("rejected");
+    expect(response.data).toHaveProperty('rejectionReason');
+    expect(response.data.rejectionReason).toBeTruthy();
+    // expect(response.data.txSignature.length).toBe(SIGNATURE_LENGTH);
+    // TODO verify the signature
 
   });
+
+
 
 
   // TODO: add failure test cases
