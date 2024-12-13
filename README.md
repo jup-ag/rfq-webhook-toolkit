@@ -5,6 +5,50 @@
 
 ## Market Maker Integration Guidelines
 
+The following diagram gives an overview of the request workflow: 
+
+
+```mermaid
+sequenceDiagram
+   participant FE
+   participant API as Jupiter RFQ API
+   participant MM as Market Makers
+
+   FE->>API: /quote
+
+   activate API
+   activate MM
+      API->>MM: /quote
+      MM->>API: quotesResponse
+   deactivate MM
+      API->>API: Create Tx
+      API->>FE: Best quoteResponse with Tx
+   deactivate API
+
+   activate FE
+      FE ->> FE: Partial Sign Tx
+      FE ->> API: /swap with partial signed Tx
+   deactivate FE
+
+   activate API
+      API->>API: Checks Tx
+      API->>MM: /swap with partial signed Tx
+
+      activate MM
+         MM->>MM: Sign and send Tx
+         MM->>API: swapResponse (acceptance/bail)
+      deactivate MM
+
+      activate FE
+         API->>FE: swapResponse (acceptance/bail)
+   deactivate API
+         FE->>FE: Poll userAcc for Tx confirmation
+   deactivate FE
+
+   Note over FE,MM: end
+```
+
+
 
 ## Integration specifications
 
