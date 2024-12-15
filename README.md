@@ -5,7 +5,7 @@
 
 ## Market Maker Integration Guidelines
 
-The following diagram gives an overview of the request workflow: 
+The following diagram gives an overview of the request workflow:
 
 
 ```mermaid
@@ -73,7 +73,7 @@ If you require an API key to access your endpoints, please provide it to us duri
 
 ## Api Documentation
 
-REST API  documentation is provided in OpenAPI format. You can find the documentation [here](./openapi/openapi.json). To view the documentation, you can use tools like [Swagger Editor](https://editor-next.swagger.io/).
+REST API  documentation is provided in OpenAPI format. You can find the documentation [here](./openapi).
 
 A sample server with the API documentation is provider in the [`server-example`](./server-example/) directory. To launch the server, run the following commands (requires rust and cargo to be installed):
 
