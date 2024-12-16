@@ -1,5 +1,5 @@
 [workspace]
-members = ["server-example", "webhook-api"]
+members = ["server-example", "webhook-api", "programs/*", "order-engine-sdk"]
 resolver = "2"
 
 [workspace.package]
