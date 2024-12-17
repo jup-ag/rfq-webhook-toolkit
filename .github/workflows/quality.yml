@@ -1,0 +1,67 @@
+name: Quality Check
+on:
+  pull_request:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  format:
+    name: Check Code Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt -- --check
+  test:
+    name: Test and coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: "-A warnings"
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+      - name: Run tests with coverage
+        run: |
+          RPC_URLS=${{ secrets.RPC_URLS }} cargo llvm-cov --release --workspace --summary-only --remap-path-prefix --json > coverage.json
+      - name: Generate coverage summary
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          # Read JSON and convert it to Markdown table using jq
+          echo "<details><summary>Coverage report</summary>" > coverage.md
+          echo "" >> coverage.md
+          echo "Filename | Lines Covered (%) | Functions Covered (%) " >> coverage.md
+          echo "--- | --- | --- " >> coverage.md
+          jq -r '
+          .data[0].files as $files | $files[] |
+          [
+              .filename,
+              (.summary.lines.percent * 100|round / 100),
+              (.summary.functions.percent * 100 |round / 100)
+          ] |
+          @tsv |
+          gsub("\t"; " | ")
+          ' coverage.json >> coverage.md
+          echo "" >> coverage.md
+          echo "</details>" >> coverage.md
+      - name: Add reactions
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          body-path: coverage.md
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
