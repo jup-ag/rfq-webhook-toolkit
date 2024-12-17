@@ -1,6 +1,6 @@
 # RFQ Webhook Toolkit
 
-:mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. [Open an issue](https://github.com/jup-ag/rfq-webhook-toolkit/issues/new) for any feedback or questions.
+:mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. If you are interested in being a MM on Jupiter RFQ, please read the below toolkit and reach out to [Soju](t.me/sojuuuu54) on Telegram to register your webhook. 
 
 
 ## Market Maker Integration Guidelines
