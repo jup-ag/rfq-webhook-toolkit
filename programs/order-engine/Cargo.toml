@@ -1,0 +1,40 @@
+[package]
+name = "order-engine"
+version = "0.1.0"
+description = ""
+edition = { workspace = true }
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "order_engine"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+custom-heap = []
+anchor-debug = []
+custom-panic = []
+production = []
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    'cfg(target_os, values("solana"))',
+]
+
+[dependencies]
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+test-case = { workspace = true }
+
+[dev-dependencies]
+solana-sdk = { workspace = true }
+solana-program-test = { workspace = true }
+bincode = { workspace = true }
+spl-token-client = { workspace = true }
+assert_matches = { workspace = true }
+itertools = { workspace = true }
