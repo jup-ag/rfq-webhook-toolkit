@@ -7947,8 +7947,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "anchor-client"
-version = "0.30.1"
-source = "git+https://github.com/coral-xyz/anchor.git?rev=4cdb0ebe8f613f7dbbd5c4b00571139b2517898f#4cdb0ebe8f613f7dbbd5c4b00571139b2517898f"
