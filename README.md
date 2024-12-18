@@ -160,4 +160,6 @@ Current implementation enforces that Jupiter RFQ API will be the one crafting th
 
 Some market makers may not wish to be the ones handling the sending of transactions on chain. We may look into helping market makers land their transactions on chain in the future.
 
+### Fees
 
+We will likely introduce a fee in the range bps applied to the MM, based on total filled volume. More details to be announced on the introduction of fees on Jupiter RFQ. Currently, we welcome all MMs to integrate Jupiter RFQ with 0 fees for a limited, testing period. 
