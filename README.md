@@ -2,7 +2,13 @@
 
 :mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. If you are interested in being a MM on Jupiter RFQ, please read the below toolkit and reach out to [Soju](t.me/sojuuuu54) on Telegram to register your webhook. 
 
-RFQ relies on the mainnet deployment of the [Order engine program](https://solscan.io/account/61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH) to fill
+
+## Order Engine
+
+The RFQ functionality depends on the mainnet deployment of the [Order Engine Program](https://solscan.io/account/61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH) for order fulfillment. 
+
+- **Source Code**: The program's source is located in the [`programs/order-engine`](./programs/order-engine) directory.
+- **IDL**: The Interface Definition Language (IDL) file is available [here](./idls).
 
 ## Market Maker Integration Guidelines
 
