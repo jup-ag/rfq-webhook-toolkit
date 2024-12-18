@@ -10,6 +10,10 @@ The RFQ functionality depends on the mainnet deployment of the [Order Engine Pro
 - **Source Code**: The program's source is located in the [`programs/order-engine`](./programs/order-engine) directory.
 - **IDL**: The Interface Definition Language (IDL) file is available [here](./idls).
 
+## Audit
+
+- [Offside labs audit report](audits/Jupiter-RFQ-Nov-2024-OffsideLabs.pdf): Offside labs has audited the order engine program [`programs/order-engine`](programs/order-engine) and the off-chain validation [`order-engine-sdk/src/fill.rs`](order-engine-sdk/src/fill.rs)
+
 ## Market Maker Integration Guidelines
 
 The following diagram gives an overview of the request workflow:
