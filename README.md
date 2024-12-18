@@ -3,6 +3,17 @@
 :mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. If you are interested in being a MM on Jupiter RFQ, please read the below toolkit and reach out to [Soju](https://t.me/sojuuuu54) / [Ben](https://t.me/benliewxyz) on Telegram to register your webhook. 
 
 
+## Order Engine
+
+The RFQ functionality depends on the mainnet deployment of the [Order Engine Program](https://solscan.io/account/61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH) for order fulfillment. 
+
+- **Source Code**: The program's source is located in the [`programs/order-engine`](./programs/order-engine) directory.
+- **IDL**: The Interface Definition Language (IDL) file is available [here](./idls).
+
+## Audit
+
+- [Offside labs audit report](audits/Jupiter-RFQ-Nov-2024-OffsideLabs.pdf): Offside labs has audited the order engine program [`programs/order-engine`](programs/order-engine) and the off-chain validation [`order-engine-sdk/src/fill.rs`](order-engine-sdk/src/fill.rs)
+
 ## Market Maker Integration Guidelines
 
 The following diagram gives an overview of the request workflow:
