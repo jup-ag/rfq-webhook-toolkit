@@ -36,8 +36,6 @@ describe('Webhook API Quote', () => {
     expect(response.data).toHaveProperty('maker');
     expect(response.data).toHaveProperty('amountOut');
     expect(new BN(response.data.amountOut).gt(new BN(0))).toBe(true);
-
-
   });
 
 
@@ -61,13 +59,9 @@ describe('Webhook API Quote', () => {
     expect(response.status).toBe(200);
     expect(response.data.quoteId).toBe(payload.quoteId);
     expect(response.data.state).toBe("accepted");
-    expect(response.data.txSignature.length).toBe(SIGNATURE_LENGTH);
-    // TODO verify the signature
   });
 
   it('it should simulate a swap rejection', async () => {
-
-
     const url = `${WEBHOOK_URL}/swap`;
     console.log('request url: ', url);
 
@@ -86,14 +80,25 @@ describe('Webhook API Quote', () => {
     expect(response.data.state).toBe("rejected");
     expect(response.data).toHaveProperty('rejectionReason');
     expect(response.data.rejectionReason).toBeTruthy();
-    // expect(response.data.txSignature.length).toBe(SIGNATURE_LENGTH);
-    // TODO verify the signature
-
   });
 
 
+  it('should return a successful accepted token list', async () => {
+    const url = `${WEBHOOK_URL}/tokens`;
+    console.log('request url: ', url);
 
+    const response = await axios.get(url);
 
-  // TODO: add failure test cases
+    console.log("response --> ", response.data);
+
+    expect(response.status).toBe(200);
+    if(response.data.add) {
+      expect(response.data.add.length).toBeGreaterThanOrEqual(0);
+    }
+    if(response.data.remove) {
+      expect(response.data.remove.length).toBeGreaterThanOrEqual(0);
+    }
+  });
+
 
 });

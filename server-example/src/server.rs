@@ -179,6 +179,25 @@ async fn example_swap(
     }
 }
 
+#[utoipa::path(get, path = "/tokens",
+params(
+    ("X-API-KEY" = Option<String>, Header, description = "Optional API Key (if required by the webhook)"),
+),
+responses(
+    (status = 200, body= TokenAddresses),
+    (status = 400, body= ErrorResponse),
+))]
+pub async fn example_tokens_list() -> Result<Json<TokenAddresses>, ApiError> {
+    Ok(Json(TokenAddresses {
+        add: Some(vec![
+            "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN".to_string(),
+            "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3".to_string(),
+            "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv".to_string(),
+        ]),
+        remove: None,
+    }))
+}
+
 async fn get_health() -> Result<(), ApiError> {
     Ok(())
 }
@@ -197,6 +216,7 @@ pub fn app(config: Arc<Config>) -> Router {
     let router = Router::new()
         .route("/quote", post(example_quote))
         .route("/swap", post(example_swap))
+        .route("/tokens", get(example_tokens_list))
         // not part of RFQ spec, but useful for debugging
         .route("/health", get(get_health))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))

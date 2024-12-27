@@ -48,7 +48,7 @@ pub struct SwapResponse {
     pub quote_id: String,
     #[schema(examples("accepted", "rejected"))]
     pub state: SwapState,
-    #[schema(examples("5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"))]
+    #[schema(examples("5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"), deprecated)]
     pub tx_signature: Option<String>,
     /// Optional message to provide more context when the swap is rejected
     pub rejection_reason: Option<String>,
@@ -65,4 +65,15 @@ impl From<String> for ErrorResponse {
     fn from(message: String) -> Self {
         ErrorResponse { message }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenAddresses {
+    #[schema(examples("JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub add: Option<Vec<String>>,
+    #[schema(examples("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remove: Option<Vec<String>>,
 }
