@@ -1,11 +1,11 @@
 # RFQ Webhook Toolkit
 
-:mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. If you are interested in being a MM on Jupiter RFQ, please read the below toolkit and reach out to [Soju](https://t.me/sojuuuu54) / [Ben](https://t.me/benliewxyz) on Telegram to register your webhook. 
+:mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. If you are interested in being a MM on Jupiter RFQ, please read the below toolkit and reach out to [Soju](https://t.me/sojuuuu54) / [Ben](https://t.me/benliewxyz) on Telegram to register your webhook.
 
 
 ## Order Engine
 
-The RFQ functionality depends on the mainnet deployment of the [Order Engine Program](https://solscan.io/account/61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH) for order fulfillment. 
+The RFQ functionality depends on the mainnet deployment of the [Order Engine Program](https://solscan.io/account/61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH) for order fulfillment.
 
 - **Source Code**: The program's source is located in the [`programs/order-engine`](./programs/order-engine) directory.
 - **IDL**: The Interface Definition Language (IDL) file is available [here](./idls).
@@ -76,6 +76,12 @@ Endpoints we will call after registration
 ```
 POST https://your-api-endpoint.com/jupiter/rfq/quote
 POST https://your-api-endpoint.com/jupiter/rfq/swap
+```
+
+In addition, the webhook will be called at regular intervals to fetch the list of supported tokens (see [below](#advertising-supported-tokens)):
+
+```
+GET https://your-api-endpoint.com/jupiter/rfq/tokens
 ```
 
 #### API Key
@@ -156,6 +162,15 @@ This fixed expiry flow simplifies the integration by:
 
 Note: These expiry thresholds may be adjusted based on performance and feedback.
 
+
+## Advertising supported tokens
+
+In order to receive meaningful quote requests, market makers need to advertise the tokens they support. This is done by providing a list of supported tokens in the response to the `/tokens` endpoint. The response should be a JSON array of token addresses, to add or remove to the list of supported tokens for the webhook.
+
+The following list of tokens will always be included in the request:
+
+1. USDC/WSOL `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`/`So11111111111111111111111111111111111111112`
+
 ## Future considerations/plans
 
 
@@ -173,4 +188,4 @@ Some market makers may not wish to be the ones handling the sending of transacti
 
 ### Fees
 
-We will likely introduce a fee in the range bps applied to the MM, based on total filled volume. More details to be announced on the introduction of fees on Jupiter RFQ. Currently, we welcome all MMs to integrate Jupiter RFQ with 0 fees for a limited, testing period. 
+We will likely introduce a fee in the range bps applied to the MM, based on total filled volume. More details to be announced on the introduction of fees on Jupiter RFQ. Currently, we welcome all MMs to integrate Jupiter RFQ with 0 fees for a limited, testing period.
