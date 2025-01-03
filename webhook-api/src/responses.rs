@@ -66,14 +66,3 @@ impl From<String> for ErrorResponse {
         ErrorResponse { message }
     }
 }
-
-#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenAddresses {
-    #[schema(examples("JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"))]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub add: Option<Vec<String>>,
-    #[schema(examples("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"))]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub remove: Option<Vec<String>>,
-}

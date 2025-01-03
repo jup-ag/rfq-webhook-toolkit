@@ -12,7 +12,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use utoipauto::utoipauto;
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration, vec};
 
 use axum::{
     extract::{rejection::JsonRejection, Query, State},
@@ -184,18 +184,15 @@ params(
     ("X-API-KEY" = Option<String>, Header, description = "Optional API Key (if required by the webhook)"),
 ),
 responses(
-    (status = 200, body= TokenAddresses),
+    (status = 200, body= Vec<String>),
     (status = 400, body= ErrorResponse),
 ))]
-pub async fn example_tokens_list() -> Result<Json<TokenAddresses>, ApiError> {
-    Ok(Json(TokenAddresses {
-        add: Some(vec![
-            "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN".to_string(),
-            "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3".to_string(),
-            "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv".to_string(),
-        ]),
-        remove: None,
-    }))
+pub async fn example_tokens_list() -> Result<Json<Vec<String>>, ApiError> {
+    Ok(Json(vec![
+        "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN".to_string(),
+        "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3".to_string(),
+        "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv".to_string(),
+    ]))
 }
 
 async fn get_health() -> Result<(), ApiError> {
