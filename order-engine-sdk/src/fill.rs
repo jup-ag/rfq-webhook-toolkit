@@ -152,17 +152,22 @@ pub fn validate_similar_fill_sanitized_message(
     sanitized_message: SanitizedMessage,
     original_sanitized_message: SanitizedMessage,
 ) -> Result<ValidatedSimilarFill> {
-    let original_num_required_signatures =
-        original_sanitized_message.header().num_required_signatures;
     ensure!(
-        sanitized_message.header().num_required_signatures == original_num_required_signatures,
-        "Num required signatures did not match"
+        original_sanitized_message.recent_blockhash() == sanitized_message.recent_blockhash(),
+        "Recent blockhash has been modified"
     );
+
+    let original_message_header = original_sanitized_message.header();
+    ensure!(
+        sanitized_message.header() == original_message_header,
+        "Message header has been modified"
+    );
+
     for (original_signer, signer) in original_sanitized_message
         .account_keys()
         .iter()
         .zip(sanitized_message.account_keys().iter())
-        .take(usize::from(original_num_required_signatures))
+        .take(usize::from(original_message_header.num_required_signatures))
     {
         ensure!(signer == original_signer, "Signer did not match");
     }
@@ -197,7 +202,26 @@ pub fn validate_similar_fill_sanitized_message(
         .zip(original_instructions)
         .enumerate()
     {
-        if program_id == original_program_id && original_program_id == &compute_budget::ID {
+        ensure!(
+            program_id == original_program_id,
+            "Instruction program id did not match the original message at index {index}, {original_program_id}"
+        );
+        ensure!(
+            accounts.len() == original_accounts.len(),
+            "Instruction accounts length was not equal at index {index}, {original_program_id}"
+        );
+        ensure!(
+            accounts
+                .iter()
+                .zip(original_accounts)
+                .all(|(accounts, original_accounts)| {
+                    accounts.pubkey == original_accounts.pubkey
+                        && accounts.is_signer == original_accounts.is_signer
+                        && accounts.is_writable == original_accounts.is_writable
+                }),
+            "Instruction accounts did not match the original message {index}, {original_program_id}"
+        );
+        if original_program_id == &compute_budget::ID {
             // Allow for compute unit price to change, since some wallets change it
             let compute_budget_ix = try_from_slice_unchecked::<ComputeBudgetInstruction>(data)?;
             match compute_budget_ix {
@@ -214,26 +238,10 @@ pub fn validate_similar_fill_sanitized_message(
             }
         }
 
-        // Check the account len matches
         ensure!(
-            accounts.len() == original_accounts.len(),
-            "Account len did not match"
+            data == original_data,
+            "Instruction did not match the original at index {index}, {original_program_id}"
         );
-
-        // Must be identical to original
-        if program_id != original_program_id
-            || accounts
-                .iter()
-                .zip(original_accounts)
-                .any(|(accounts, original_accounts)| {
-                    accounts.pubkey != original_accounts.pubkey
-                        || accounts.is_signer != original_accounts.is_signer
-                        || accounts.is_writable != original_accounts.is_writable
-                })
-            || data != original_data
-        {
-            bail!("Instruction did not match the original at index {index}, {original_program_id}");
-        }
 
         // If the program_id is order_engine then we give additional information to verify
         if program_id == &order_engine::ID {
