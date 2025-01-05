@@ -1,10 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import axios from 'axios';
 const BN = require('bn.js');
+const solanaWeb3 = require('@solana/web3.js');
+
 
 
 // Base API URL, load from environment variable or use default
 const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:8080';
+
+
+// Helper function to validate Solana addresses
+function isValidSolanaAddress(address) {
+  try {
+    // Attempt to create a PublicKey, which validates the address format
+    new solanaWeb3.PublicKey(address);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 // Start mock server before tests and close it after
 describe('Webhook API Quote', () => {
@@ -92,12 +106,12 @@ describe('Webhook API Quote', () => {
     console.log("response --> ", response.data);
 
     expect(response.status).toBe(200);
-    if(response.data.add) {
-      expect(response.data.add.length).toBeGreaterThanOrEqual(0);
+    expect(response.data.length).toBeGreaterThanOrEqual(0);
+
+    for (let tokenAddress of response.data) {
+      expect(isValidSolanaAddress(tokenAddress)).toBe(true);
     }
-    if(response.data.remove) {
-      expect(response.data.remove.length).toBeGreaterThanOrEqual(0);
-    }
+
   });
 
 
