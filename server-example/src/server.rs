@@ -115,7 +115,7 @@ async fn example_quote(
         quote_id: quote_request.quote_id,
         taker: quote_request.taker,
         token_in: quote_request.token_in,
-        amount_in: quote_request.amount.clone(),
+        amount_in: quote_request.amount_in.clone(),
         token_out: quote_request.token_out,
         quote_type: quote_request.quote_type,
         protocol: quote_request.protocol,
