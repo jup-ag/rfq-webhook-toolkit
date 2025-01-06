@@ -169,7 +169,7 @@ In order to receive meaningful quote requests, market makers need to advertise t
 
 The following list of tokens will always be included in the request:
 
-- TBD (the list will be published onece ready)
+- TBD (the list will be published once ready)
 
 ## Future considerations/plans
 
