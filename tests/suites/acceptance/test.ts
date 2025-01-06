@@ -1,10 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import axios from 'axios';
 const BN = require('bn.js');
+const solanaWeb3 = require('@solana/web3.js');
+
 
 
 // Base API URL, load from environment variable or use default
 const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:8080';
+
+
+// Helper function to validate Solana addresses
+function isValidSolanaAddress(address) {
+  try {
+    // Attempt to create a PublicKey, which validates the address format
+    new solanaWeb3.PublicKey(address);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 // Start mock server before tests and close it after
 describe('Webhook API Quote', () => {
@@ -36,8 +50,6 @@ describe('Webhook API Quote', () => {
     expect(response.data).toHaveProperty('maker');
     expect(response.data).toHaveProperty('amountOut');
     expect(new BN(response.data.amountOut).gt(new BN(0))).toBe(true);
-
-
   });
 
 
@@ -61,13 +73,9 @@ describe('Webhook API Quote', () => {
     expect(response.status).toBe(200);
     expect(response.data.quoteId).toBe(payload.quoteId);
     expect(response.data.state).toBe("accepted");
-    expect(response.data.txSignature.length).toBe(SIGNATURE_LENGTH);
-    // TODO verify the signature
   });
 
   it('it should simulate a swap rejection', async () => {
-
-
     const url = `${WEBHOOK_URL}/swap`;
     console.log('request url: ', url);
 
@@ -86,14 +94,25 @@ describe('Webhook API Quote', () => {
     expect(response.data.state).toBe("rejected");
     expect(response.data).toHaveProperty('rejectionReason');
     expect(response.data.rejectionReason).toBeTruthy();
-    // expect(response.data.txSignature.length).toBe(SIGNATURE_LENGTH);
-    // TODO verify the signature
-
   });
 
 
+  it('should return a successful accepted token list', async () => {
+    const url = `${WEBHOOK_URL}/tokens`;
+    console.log('request url: ', url);
 
+    const response = await axios.get(url);
 
-  // TODO: add failure test cases
+    console.log("response --> ", response.data);
+
+    expect(response.status).toBe(200);
+    expect(response.data.length).toBeGreaterThanOrEqual(0);
+
+    for (let tokenAddress of response.data) {
+      expect(isValidSolanaAddress(tokenAddress)).toBe(true);
+    }
+
+  });
+
 
 });

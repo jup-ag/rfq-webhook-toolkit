@@ -12,7 +12,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use utoipauto::utoipauto;
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration, vec};
 
 use axum::{
     extract::{rejection::JsonRejection, Query, State},
@@ -115,7 +115,7 @@ async fn example_quote(
         quote_id: quote_request.quote_id,
         taker: quote_request.taker,
         token_in: quote_request.token_in,
-        amount_in: quote_request.amount.clone(),
+        amount_in: quote_request.amount_in.clone(),
         token_out: quote_request.token_out,
         quote_type: quote_request.quote_type,
         protocol: quote_request.protocol,
@@ -179,6 +179,22 @@ async fn example_swap(
     }
 }
 
+#[utoipa::path(get, path = "/tokens",
+params(
+    ("X-API-KEY" = Option<String>, Header, description = "Optional API Key (if required by the webhook)"),
+),
+responses(
+    (status = 200, body= Vec<String>),
+    (status = 400, body= ErrorResponse),
+))]
+pub async fn example_tokens_list() -> Result<Json<Vec<String>>, ApiError> {
+    Ok(Json(vec![
+        "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN".to_string(),
+        "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3".to_string(),
+        "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv".to_string(),
+    ]))
+}
+
 async fn get_health() -> Result<(), ApiError> {
     Ok(())
 }
@@ -197,6 +213,7 @@ pub fn app(config: Arc<Config>) -> Router {
     let router = Router::new()
         .route("/quote", post(example_quote))
         .route("/swap", post(example_swap))
+        .route("/tokens", get(example_tokens_list))
         // not part of RFQ spec, but useful for debugging
         .route("/health", get(get_health))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))

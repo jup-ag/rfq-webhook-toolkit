@@ -15,6 +15,7 @@
     "acceptance": "vitest run ./suites/acceptance"
   },
   "dependencies": {
-    "bn.js": "^5.2.1"
+    "bn.js": "^5.2.1",
+    "solana": "^3.0.0"
   }
 }

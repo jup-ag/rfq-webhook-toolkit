@@ -64,4 +64,3 @@ jobs:
         with:
           body-path: coverage.md
           issue-number: ${{ github.event.pull_request.number }}
-          comment-author: "github-actions[bot]"

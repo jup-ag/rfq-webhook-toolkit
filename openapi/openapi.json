@@ -140,6 +140,39 @@
           }
         }
       }
+    },
+    "/tokens": {
+      "get": {
+        "tags": ["crate::server"],
+        "operationId": "example_tokens_list",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "Optional API Key (if required by the webhook)",
+            "required": false,
+            "schema": { "type": ["string", "null"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -169,7 +202,11 @@
           "protocol"
         ],
         "properties": {
-          "amount": { "type": "string", "examples": ["250000000"] },
+          "amount": {
+            "type": "string",
+            "deprecated": true,
+            "examples": ["250000000"]
+          },
           "amountIn": { "type": "string", "examples": ["250000000"] },
           "protocol": { "$ref": "#/components/schemas/Protocol" },
           "quoteId": {
@@ -274,7 +311,7 @@
             "type": "string",
             "description": "Base64 encoded versioned transaction",
             "examples": [
-              "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAIABgxSnEehNb4kLTrfnzoVcTu/GPLBwP0kKZRTJowyLvHxxSdkl7oLuGWRcrcu3Yxm4Y9WF2TZyGphCjp+D3nAuvnbWolfQZ0Kl+9/uOLLKVXoXu/o/NQI5LY9pgx8ibLVfztqKpSdlIRAyuBnIsFa1A93abdI4AmIcbFLGFGatrhAXnMzpil7FnByGEuo10mEgCYqn/QfD1DTR6idALqAu9Bhh6NTL/nu9FDLsM2mMKzzPPKY2nBeuUHR7ibnmbqVw/MAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABpuIV/6rgYT7aH9jRhjANdrEOdwa6ztVmKDwAAAAAAEG3fbh12Whk9nL4UbO63msHLSF7V9bN5E6jPWFfv8AqUpYSftyo7vpH9xbDmpX9jxaHLRbIGem7Qys02OVyKECxvp6877brTo9ZfNqq8l0MbG75MLS9uDkfKYCA0UvXWE9f/tHi80zsUphEh9edGz8h7JFCM8ITLeBpkq6CPTyfQMHAAkDmLEBAAAAAAAHAAUCwFwVAAoMAQACAwoFCwkICQYEIKhgt6NcCiigAMqaOwAAAAAm/0kBAQAAAEAvW2cAAAAAAA=="
+              "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAz9drCWYYQ68kASuBn9OHQMhApFELvj44L1s76RFusqcFQ3u65aig44TQ3Fmb9CadUg6y5zJuBNnD1IxqvKXIPmA4AmO5Dcos4MycwafOIB13mDRFQ1GIRqKG3olkhi48jyGiqvTscHPp0TmqflJdR4gzVibQqwIj1iO1jXHw5Mt99q5m2Edp3glkLYOc/yT1HqD+ndBXyPYu16F84mC8rspYEafRZphIlog6Q2qO4TFgN8ICPW2yl1kkJ2UutYEAxh1w4ztXWtKZr0O736NcYMPOKkRjP8CiDXheWMdaprkzkaA5jAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvEC3LPJppXp/7XKg0lfT6E87hQi8th5zPmi1Q6AAAAAiDuU6+gSRr+Hx/3xlmJE16rC5kSGnxcWkohAAAAAAAg5izz2u1OeCnop+hOiUf4tBZ6V2mJYyUZ0OXgw2U/A4C33oSysI64Na/dJmwBs/WKYt6Nnkl1JWNR65pjlN4nAKWsCeLSm9f59f75OR3BSLGqzUjgzq3orAORpoFbS1sy0skiTfwZdbBKqGpHSo0ZZfwJkHDO1fB4frglAsUPj0YoKeHP5JwEP4awSwmz4vanicFfQDIeA6ZM8UhZEZe0FLBZAAyNq5O0AAAAAAA2AAagQ9iAAAlYAMq28zUDAlb3EiKAFj7JAPtooroIJbdZdUpVUmdUfgBMAAAAAAH4YYwAAAAAAC9MP4tAAAAAAA=="
             ]
           }
         }
@@ -295,6 +332,7 @@
           "state": { "$ref": "#/components/schemas/SwapState" },
           "txSignature": {
             "type": ["string", "null"],
+            "deprecated": true,
             "examples": [
               "5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"
             ]
