@@ -169,7 +169,7 @@ In order to receive meaningful quote requests, market makers need to advertise t
 
 The following list of tokens will always be included in the request:
 
-1. USDC/WSOL `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`/`So11111111111111111111111111111111111111112`
+- TBD (the list will be published onece ready)
 
 ## Future considerations/plans
 
