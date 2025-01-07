@@ -4,4 +4,5 @@ use anchor_lang::error_code;
 pub enum OrderEngineError {
     InvalidCalculation,
     MissingTemporaryWrappedSolTokenAccount,
+    Token2022MintExtensionNotSupported,
 }

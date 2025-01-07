@@ -1,11 +1,21 @@
-use anchor_lang::{prelude::*, solana_program::program_pack::Pack, system_program};
+use anchor_lang::{
+    prelude::*, solana_program::program_option::COption, solana_program::program_pack::Pack,
+    system_program,
+};
 use anchor_spl::{
     associated_token::spl_associated_token_account::tools::account::create_pda_account,
     token::{
         self,
         spl_token::{self, native_mint},
     },
-    token_interface::{TokenAccount, TokenInterface},
+    token_2022::spl_token_2022::{
+        self,
+        extension::{
+            transfer_fee::TransferFeeConfig, transfer_hook::TransferHook, BaseStateWithExtensions,
+            ExtensionType, StateWithExtensions,
+        },
+    },
+    token_interface::{self, spl_pod::primitives::PodU16, TokenAccount, TokenInterface},
 };
 
 use crate::error::OrderEngineError;
@@ -73,19 +83,14 @@ pub fn handle_fill<'c: 'info, 'info>(
                 input_amount,
             )?;
         }
-        (Some(taker_input_mint_token_account), Some(maker_input_mint_token_account)) => {
-            token::transfer(
-                CpiContext::new(
-                    ctx.accounts.input_token_program.to_account_info(),
-                    token::Transfer {
-                        from: taker_input_mint_token_account.to_account_info(),
-                        to: maker_input_mint_token_account.to_account_info(),
-                        authority: ctx.accounts.taker.to_account_info(),
-                    },
-                ),
-                input_amount,
-            )?;
-        }
+        (Some(taker_input_mint_token_account), Some(maker_input_mint_token_account)) => transfer(
+            ctx.accounts.input_token_program.to_account_info(),
+            taker_input_mint_token_account.to_account_info(),
+            maker_input_mint_token_account.to_account_info(),
+            ctx.accounts.taker.to_account_info(),
+            ctx.accounts.input_mint.to_account_info(),
+            input_amount,
+        )?,
     }
 
     match (
@@ -141,22 +146,119 @@ pub fn handle_fill<'c: 'info, 'info>(
                 },
             ))?;
         }
-        (Some(maker_output_mint_token_account), Some(taker_output_mint_token_account)) => {
-            token::transfer(
-                CpiContext::new(
-                    ctx.accounts.output_token_program.to_account_info(),
-                    token::Transfer {
-                        from: maker_output_mint_token_account.to_account_info(),
-                        to: taker_output_mint_token_account.to_account_info(),
-                        authority: ctx.accounts.maker.to_account_info(),
-                    },
-                ),
-                output_amount,
-            )?;
-        }
+        (Some(maker_output_mint_token_account), Some(taker_output_mint_token_account)) => transfer(
+            ctx.accounts.output_token_program.to_account_info(),
+            maker_output_mint_token_account.to_account_info(),
+            taker_output_mint_token_account.to_account_info(),
+            ctx.accounts.maker.to_account_info(),
+            ctx.accounts.output_mint.to_account_info(),
+            output_amount,
+        )?,
     }
 
     Ok(())
+}
+
+fn transfer<'info>(
+    token_program: AccountInfo<'info>,
+    from: AccountInfo<'info>,
+    to: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    amount: u64,
+) -> Result<()> {
+    let decimals_for_transfer_checked = if token_program.key.eq(&spl_token_2022::ID) {
+        let mint_data = mint.try_borrow_data()?;
+        let mint_state_with_extensions =
+            StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+
+        // reference https://github.com/solana-labs/solana-program-library/blob/e215d42a076d22512b60007839f3a3f216d9972d/token/program-2022/src/processor.rs#L368-L392
+        let mut has_extension_requiring_transfer_checked = false;
+        for extension_type in mint_state_with_extensions.get_extension_types()? {
+            match extension_type {
+                ExtensionType::TransferFeeConfig => {
+                    has_extension_requiring_transfer_checked = true;
+                    let transfer_fee_config =
+                        mint_state_with_extensions.get_extension::<TransferFeeConfig>()?;
+                    if transfer_fee_config
+                        .get_epoch_fee(Clock::get()?.epoch)
+                        .transfer_fee_basis_points
+                        != PodU16([0; 2])
+                    {
+                        return Err(OrderEngineError::Token2022MintExtensionNotSupported.into());
+                    }
+                }
+                ExtensionType::ConfidentialTransferMint => (),
+                ExtensionType::PermanentDelegate => (),
+                ExtensionType::TransferHook => {
+                    has_extension_requiring_transfer_checked = true;
+                    let transfer_hook =
+                        mint_state_with_extensions.get_extension::<TransferHook>()?;
+                    if COption::<Pubkey>::from(transfer_hook.program_id).is_some() {
+                        return Err(OrderEngineError::Token2022MintExtensionNotSupported.into());
+                    }
+                }
+                ExtensionType::ConfidentialTransferFeeConfig => (),
+                ExtensionType::MetadataPointer => (),
+                ExtensionType::TokenMetadata => (),
+                ExtensionType::GroupPointer => (),
+                ExtensionType::TokenGroup => (),
+                ExtensionType::GroupMemberPointer => (),
+                ExtensionType::TokenGroupMember => (),
+                ExtensionType::NonTransferableAccount
+                | ExtensionType::TransferHookAccount
+                | ExtensionType::CpiGuard
+                | ExtensionType::InterestBearingConfig
+                | ExtensionType::Uninitialized
+                | ExtensionType::TransferFeeAmount
+                | ExtensionType::MintCloseAuthority
+                | ExtensionType::ConfidentialTransferAccount
+                | ExtensionType::ImmutableOwner
+                | ExtensionType::MemoTransfer
+                | ExtensionType::DefaultAccountState
+                | ExtensionType::NonTransferable
+                | ExtensionType::ConfidentialTransferFeeAmount => {
+                    return Err(OrderEngineError::Token2022MintExtensionNotSupported.into())
+                }
+            }
+        }
+
+        if has_extension_requiring_transfer_checked {
+            Some(mint_state_with_extensions.base.decimals)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    match decimals_for_transfer_checked {
+        Some(decimals) => token_interface::transfer_checked(
+            CpiContext::new(
+                token_program,
+                token_interface::TransferChecked {
+                    from,
+                    mint,
+                    to,
+                    authority,
+                },
+            ),
+            amount,
+            decimals,
+        ),
+        #[allow(deprecated)]
+        None => token_interface::transfer(
+            CpiContext::new(
+                token_program,
+                token_interface::Transfer {
+                    from,
+                    to,
+                    authority,
+                },
+            ),
+            amount,
+        ),
+    }
 }
 
 #[derive(Accounts)]
@@ -202,6 +304,7 @@ pub struct Fill<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn unwrap_sol<'info>(
     maker: AccountInfo<'info>,
     sender: AccountInfo<'info>,

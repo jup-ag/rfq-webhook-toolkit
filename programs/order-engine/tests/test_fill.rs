@@ -10,18 +10,20 @@ use assert_matches::assert_matches;
 use itertools::Itertools;
 use solana_program_test::{
     tokio::{self, sync::Mutex},
-    BanksClient, ProgramTest,
+    BanksClient, BanksClientError, ProgramTest,
 };
 use solana_sdk::{
     feature_set::bpf_account_data_direct_mapping, native_token::LAMPORTS_PER_SOL,
     signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
+    transaction::TransactionError,
 };
 use spl_token_client::{
     client::{
         ProgramBanksClient, ProgramBanksClientProcessTransaction, SendTransaction,
         SimulateTransaction,
     },
-    token::Token,
+    spl_token_2022::extension::ExtensionType,
+    token::{ExtensionInitializationParams, Token},
 };
 use test_case::test_case;
 
@@ -36,17 +38,21 @@ async fn get_amount_or_lamports(
     }
 }
 
-#[test_case(TestMode::default())]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::NativeSol, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::NativeSol, output: AccountKind::Token }})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeSol }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeSol }})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::NativeSol, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::NativeMint, output: AccountKind::Token }})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeSol }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::NativeMint, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::NativeSol, output: AccountKind::Token }})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeSol }})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::NativeMint, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::NativeMint, output: AccountKind::Token }})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }})]
+#[test_case(Default::default())]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::NativeSol, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::NativeSol, output: AccountKind::Token }, ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeSol }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeSol }, ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::NativeSol, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::NativeMint, output: AccountKind::Token }, ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeSol }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::NativeMint, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::NativeSol, output: AccountKind::Token }, ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeSol }, ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::NativeMint, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::NativeMint, output: AccountKind::Token }, ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 0, maximum_fee: 0 }]), ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, output_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 0, maximum_fee: 0 }]), ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::NonTransferable]), expected_error: Some(TransactionError::InstructionError(0, solana_sdk::instruction::InstructionError::Custom(order_engine::error::OrderEngineError::Token2022MintExtensionNotSupported as u32))), ..Default::default()})]
 #[tokio::test]
 async fn test_fill(test_mode: TestMode) {
+    let expected_error = test_mode.expected_error.clone();
     let test_environment = prepare_test(test_mode).await;
 
     let fill_instruction = test_environment.create_fill_instruction();
@@ -90,13 +96,26 @@ async fn test_fill(test_mode: TestMode) {
     let before_maker_output_amount = maker_output_balance_reader.get_balance().await;
 
     // Maker fills
-    process_and_assert_ok(
+    let result = process_instructions(
         &[fill_instruction],
         &payer, // To simplify accounting we make the payer another keypair, this has no impact on the fill instruction
         &[&taker_keypair, &maker_keypair],
         &banks_client,
     )
     .await;
+
+    match expected_error {
+        Some(expected_error) => {
+            assert_matches!(
+                result.unwrap_err(),
+                BanksClientError::TransactionError(expected_error)
+            );
+            return;
+        }
+        None => {
+            assert_matches!(result, Ok(()));
+        }
+    }
 
     let after_taker_balance = taker_balance_reader.get_balance().await;
     let after_taker_input_amount = taker_input_balance_reader.get_balance().await;
@@ -257,6 +276,9 @@ struct Accounts {
 struct TestMode {
     taker_accounts: Accounts,
     maker_accounts: Accounts,
+    expected_error: Option<TransactionError>,
+    input_mint_extensions: Option<Vec<ExtensionInitializationParams>>,
+    output_mint_extensions: Option<Vec<ExtensionInitializationParams>>,
 }
 
 const TEST_AIRDROP: u64 = 5 * LAMPORTS_PER_SOL;
@@ -312,14 +334,14 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
     let input_amount = 1_000_000_000;
     let output_amount = 150_000_000;
 
-    let (taker_accounts, maker_accounts) = {
-        let TestMode {
-            taker_accounts,
-            maker_accounts,
-        } = &test_mode;
-        (taker_accounts, maker_accounts)
-    };
-    match (taker_accounts, maker_accounts) {
+    let TestMode {
+        taker_accounts,
+        maker_accounts,
+        expected_error,
+        input_mint_extensions,
+        output_mint_extensions,
+    } = test_mode;
+    match (&taker_accounts, &maker_accounts) {
         (
             Accounts {
                 input: AccountKind::Token,
@@ -428,30 +450,50 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
     };
 
     // Setup 2 mints
+    let token_a_program_id = if input_mint_extensions.is_some() {
+        anchor_spl::token_2022::ID
+    } else {
+        anchor_spl::token::ID
+    };
     let token_a = Token::new(
         client.clone(),
-        &anchor_spl::token::ID,
+        &token_a_program_id,
         &mint_a,
         Some(9),
         payer.clone(),
     );
     if let Some(mint_a_keypair) = &mint_a_keypair {
         token_a
-            .create_mint(&payer.pubkey(), None, vec![], &[mint_a_keypair])
+            .create_mint(
+                &payer.pubkey(),
+                None,
+                input_mint_extensions.unwrap_or_default(),
+                &[mint_a_keypair],
+            )
             .await
             .unwrap();
     }
 
+    let token_b_program_id = if output_mint_extensions.is_some() {
+        anchor_spl::token_2022::ID
+    } else {
+        anchor_spl::token::ID
+    };
     let token_b = Token::new(
         client.clone(),
-        &anchor_spl::token::ID,
+        &token_b_program_id,
         &mint_b,
         Some(9),
         payer.clone(),
     );
     if let Some(mint_b_keypair) = &mint_b_keypair {
         token_b
-            .create_mint(&payer.pubkey(), None, vec![], &[mint_b_keypair])
+            .create_mint(
+                &payer.pubkey(),
+                None,
+                output_mint_extensions.unwrap_or_default(),
+                &[mint_b_keypair],
+            )
             .await
             .unwrap();
     }
@@ -551,9 +593,9 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         taker_output_mint_token_account,
         maker_output_mint_token_account,
         input_mint: *token_a.get_address(),
-        input_token_program: anchor_spl::token::ID,
+        input_token_program: token_a_program_id,
         output_mint: *token_b.get_address(),
-        output_token_program: anchor_spl::token::ID,
+        output_token_program: token_b_program_id,
         input_token: token_a,
         output_token: token_b,
         temporary_wsol_token_account,
@@ -566,6 +608,15 @@ pub async fn process_and_assert_ok(
     signers: &[&Keypair],
     banks_client: &Mutex<BanksClient>,
 ) {
+    let result = process_instructions(instructions, payer, signers, banks_client).await;
+    assert_matches!(result, Ok(()));
+}
+pub async fn process_instructions(
+    instructions: &[Instruction],
+    payer: &Keypair,
+    signers: &[&Keypair],
+    banks_client: &Mutex<BanksClient>,
+) -> std::result::Result<(), BanksClientError> {
     let mut banks_client = banks_client.lock().await;
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
 
@@ -581,7 +632,7 @@ pub async fn process_and_assert_ok(
 
     println!("TX size: {}", bincode::serialize(&tx).unwrap().len());
 
-    assert_matches!(banks_client.process_transaction(tx).await, Ok(()));
+    banks_client.process_transaction(tx).await
 }
 
 /// Workaround from anchor issue https://github.com/coral-xyz/anchor/issues/2738#issuecomment-2230683481
