@@ -17,7 +17,7 @@ pub struct QuoteRequest {
     pub amount: String,
     #[schema(examples("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"))]
     pub token_out: String,
-    #[schema(examples("ExactIn"), read_only = true)]
+    #[schema(examples("exactIn"), read_only = true)]
     pub quote_type: QuoteType,
     #[schema(examples("v1"), read_only = true)]
     pub protocol: Protocol,
