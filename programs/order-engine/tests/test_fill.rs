@@ -22,7 +22,6 @@ use spl_token_client::{
         ProgramBanksClient, ProgramBanksClientProcessTransaction, SendTransaction,
         SimulateTransaction,
     },
-    spl_token_2022::extension::ExtensionType,
     token::{ExtensionInitializationParams, Token},
 };
 use test_case::test_case;
@@ -49,7 +48,8 @@ async fn get_amount_or_lamports(
 #[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, ..Default::default()})]
 #[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 0, maximum_fee: 0 }]), ..Default::default()})]
 #[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, output_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 0, maximum_fee: 0 }]), ..Default::default()})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::NonTransferable]), expected_error: Some(TransactionError::InstructionError(0, solana_sdk::instruction::InstructionError::Custom(order_engine::error::OrderEngineError::Token2022MintExtensionNotSupported as u32))), ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 100, maximum_fee: u64::MAX }]), expected_error: Some(TransactionError::InstructionError(0, solana_sdk::instruction::InstructionError::Custom(u32::from(order_engine::error::OrderEngineError::Token2022MintExtensionNotSupported)))), ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::NonTransferable]), expected_error: Some(TransactionError::InstructionError(0, solana_sdk::instruction::InstructionError::Custom(anchor_spl::token_2022::spl_token_2022::error::TokenError::NonTransferable as u32))), ..Default::default()})]
 #[tokio::test]
 async fn test_fill(test_mode: TestMode) {
     let expected_error = test_mode.expected_error.clone();
@@ -106,10 +106,10 @@ async fn test_fill(test_mode: TestMode) {
 
     match expected_error {
         Some(expected_error) => {
-            assert_matches!(
-                result.unwrap_err(),
-                BanksClientError::TransactionError(expected_error)
-            );
+            let BanksClientError::TransactionError(transaction_error) = result.unwrap_err() else {
+                panic!("The error was not a transaction error");
+            };
+            assert_eq!(transaction_error, expected_error);
             return;
         }
         None => {

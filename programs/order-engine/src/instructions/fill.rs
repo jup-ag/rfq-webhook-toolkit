@@ -1,7 +1,4 @@
-use anchor_lang::{
-    prelude::*, solana_program::program_option::COption, solana_program::program_pack::Pack,
-    system_program,
-};
+use anchor_lang::{prelude::*, solana_program::program_pack::Pack, system_program};
 use anchor_spl::{
     associated_token::spl_associated_token_account::tools::account::create_pda_account,
     token::{
@@ -11,8 +8,7 @@ use anchor_spl::{
     token_2022::spl_token_2022::{
         self,
         extension::{
-            transfer_fee::TransferFeeConfig, transfer_hook::TransferHook, BaseStateWithExtensions,
-            ExtensionType, StateWithExtensions,
+            transfer_fee::TransferFeeConfig, BaseStateWithExtensions, StateWithExtensions,
         },
     },
     token_interface::{self, spl_pod::primitives::PodU16, TokenAccount, TokenInterface},
@@ -172,62 +168,19 @@ fn transfer<'info>(
         let mint_state_with_extensions =
             StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
 
-        // reference https://github.com/solana-labs/solana-program-library/blob/e215d42a076d22512b60007839f3a3f216d9972d/token/program-2022/src/processor.rs#L368-L392
-        let mut has_extension_requiring_transfer_checked = false;
-        for extension_type in mint_state_with_extensions.get_extension_types()? {
-            match extension_type {
-                ExtensionType::TransferFeeConfig => {
-                    has_extension_requiring_transfer_checked = true;
-                    let transfer_fee_config =
-                        mint_state_with_extensions.get_extension::<TransferFeeConfig>()?;
-                    if transfer_fee_config
-                        .get_epoch_fee(Clock::get()?.epoch)
-                        .transfer_fee_basis_points
-                        != PodU16([0; 2])
-                    {
-                        return Err(OrderEngineError::Token2022MintExtensionNotSupported.into());
-                    }
-                }
-                ExtensionType::ConfidentialTransferMint => (),
-                ExtensionType::PermanentDelegate => (),
-                ExtensionType::TransferHook => {
-                    has_extension_requiring_transfer_checked = true;
-                    let transfer_hook =
-                        mint_state_with_extensions.get_extension::<TransferHook>()?;
-                    if COption::<Pubkey>::from(transfer_hook.program_id).is_some() {
-                        return Err(OrderEngineError::Token2022MintExtensionNotSupported.into());
-                    }
-                }
-                ExtensionType::ConfidentialTransferFeeConfig => (),
-                ExtensionType::MetadataPointer => (),
-                ExtensionType::TokenMetadata => (),
-                ExtensionType::GroupPointer => (),
-                ExtensionType::TokenGroup => (),
-                ExtensionType::GroupMemberPointer => (),
-                ExtensionType::TokenGroupMember => (),
-                ExtensionType::NonTransferableAccount
-                | ExtensionType::TransferHookAccount
-                | ExtensionType::CpiGuard
-                | ExtensionType::InterestBearingConfig
-                | ExtensionType::Uninitialized
-                | ExtensionType::TransferFeeAmount
-                | ExtensionType::MintCloseAuthority
-                | ExtensionType::ConfidentialTransferAccount
-                | ExtensionType::ImmutableOwner
-                | ExtensionType::MemoTransfer
-                | ExtensionType::DefaultAccountState
-                | ExtensionType::NonTransferable
-                | ExtensionType::ConfidentialTransferFeeAmount => {
-                    return Err(OrderEngineError::Token2022MintExtensionNotSupported.into())
-                }
-            }
+        if let Ok(transfer_fee_config) =
+            mint_state_with_extensions.get_extension::<TransferFeeConfig>()
+        {
+            require!(
+                transfer_fee_config
+                    .get_epoch_fee(Clock::get()?.epoch)
+                    .transfer_fee_basis_points
+                    == PodU16([0; 2]),
+                OrderEngineError::Token2022MintExtensionNotSupported
+            );
         }
 
-        if has_extension_requiring_transfer_checked {
-            Some(mint_state_with_extensions.base.decimals)
-        } else {
-            None
-        }
+        Some(mint_state_with_extensions.base.decimals)
     } else {
         None
     };
@@ -246,11 +199,10 @@ fn transfer<'info>(
             amount,
             decimals,
         ),
-        #[allow(deprecated)]
-        None => token_interface::transfer(
+        None => token::transfer(
             CpiContext::new(
                 token_program,
-                token_interface::Transfer {
+                token::Transfer {
                     from,
                     to,
                     authority,
