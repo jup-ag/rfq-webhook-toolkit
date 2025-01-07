@@ -3,13 +3,17 @@
   "info": {
     "title": "server-example",
     "description": "",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.1.0"
   },
   "paths": {
     "/quote": {
       "post": {
-        "tags": ["crate::server"],
+        "tags": [
+          "crate::server"
+        ],
         "summary": "Example quote handler",
         "description": "This is an example quote handler that returns a hardcoded quote response",
         "operationId": "example_quote",
@@ -19,13 +23,20 @@
             "in": "header",
             "description": "Optional API Key (if required by the webhook)",
             "required": false,
-            "schema": { "type": ["string", "null"] }
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/QuoteRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/QuoteRequest"
+              }
             }
           },
           "required": true
@@ -35,7 +46,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/QuoteResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResponse"
+                }
               }
             }
           },
@@ -43,7 +56,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -51,7 +66,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -59,7 +76,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -67,7 +86,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -76,7 +97,9 @@
     },
     "/swap": {
       "post": {
-        "tags": ["crate::server"],
+        "tags": [
+          "crate::server"
+        ],
         "summary": "Example swap handler",
         "description": "This is an example swap handler that showcase how to execute a swap from the MM side",
         "operationId": "example_swap",
@@ -86,13 +109,20 @@
             "in": "header",
             "description": "Optional API Key (if required by the webhook)",
             "required": false,
-            "schema": { "type": ["string", "null"] }
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SwapRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/SwapRequest"
+              }
             }
           },
           "required": true
@@ -102,7 +132,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SwapResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SwapResponse"
+                }
               }
             }
           },
@@ -110,7 +142,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -118,7 +152,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -126,7 +162,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -134,7 +172,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -143,7 +183,9 @@
     },
     "/tokens": {
       "get": {
-        "tags": ["crate::server"],
+        "tags": [
+          "crate::server"
+        ],
         "operationId": "example_tokens_list",
         "parameters": [
           {
@@ -151,7 +193,12 @@
             "in": "header",
             "description": "Optional API Key (if required by the webhook)",
             "required": false,
-            "schema": { "type": ["string", "null"] }
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
@@ -159,7 +206,12 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "type": "string" } }
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               }
             }
           },
@@ -167,7 +219,9 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -179,15 +233,24 @@
     "schemas": {
       "ErrorResponse": {
         "type": "object",
-        "required": ["message"],
+        "required": [
+          "message"
+        ],
         "properties": {
           "message": {
             "type": "string",
-            "examples": ["webhook api error message or code"]
+            "examples": [
+              "webhook api error message or code"
+            ]
           }
         }
       },
-      "Protocol": { "type": "string", "enum": ["v1"] },
+      "Protocol": {
+        "type": "string",
+        "enum": [
+          "v1"
+        ]
+      },
       "QuoteRequest": {
         "type": "object",
         "description": "Request to get a quote from the Market Maker",
@@ -195,7 +258,6 @@
           "requestId",
           "quoteId",
           "tokenIn",
-          "amountIn",
           "amount",
           "tokenOut",
           "quoteType",
@@ -204,39 +266,61 @@
         "properties": {
           "amount": {
             "type": "string",
-            "deprecated": true,
-            "examples": ["250000000"]
+            "examples": [
+              "250000000"
+            ]
           },
-          "amountIn": { "type": "string", "examples": ["250000000"] },
-          "protocol": { "$ref": "#/components/schemas/Protocol" },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
           "quoteId": {
             "type": "string",
-            "examples": ["59db3e19-c7b0-4753-a8aa-206701004498"]
+            "examples": [
+              "59db3e19-c7b0-4753-a8aa-206701004498"
+            ]
           },
-          "quoteType": { "$ref": "#/components/schemas/QuoteType" },
+          "quoteType": {
+            "$ref": "#/components/schemas/QuoteType"
+          },
           "requestId": {
             "type": "string",
-            "examples": ["629bddf3-0038-43a6-8956-f5433d6b1191"]
+            "examples": [
+              "629bddf3-0038-43a6-8956-f5433d6b1191"
+            ]
           },
           "suggestedPrioritizationFees": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "If no taker is provided, the there will be no suggested fee\nThis is the suggested total fees in lamports to be paid when building the transaction\nMMs will have the option to ignore our suggested fee and provide their own when responding to this quote",
-            "examples": ["10000"],
+            "examples": [
+              "10000"
+            ],
             "minimum": 0
           },
           "taker": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Taker is optional here as there are times we want to just get a quote without user signing in\nWhen user signs in, we should try to requote again so the new quote request will have a taker",
-            "examples": ["5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"]
+            "examples": [
+              "5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"
+            ]
           },
           "tokenIn": {
             "type": "string",
-            "examples": ["So11111111111111111111111111111111111111112"]
+            "examples": [
+              "So11111111111111111111111111111111111111112"
+            ]
           },
           "tokenOut": {
             "type": "string",
-            "examples": ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"]
+            "examples": [
+              "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            ]
           }
         }
       },
@@ -255,57 +339,105 @@
           "maker"
         ],
         "properties": {
-          "amountIn": { "type": "string", "examples": ["250000000"] },
-          "amountOut": { "type": "string", "examples": ["1000000000"] },
+          "amountIn": {
+            "type": "string",
+            "examples": [
+              "250000000"
+            ]
+          },
+          "amountOut": {
+            "type": "string",
+            "examples": [
+              "1000000000"
+            ]
+          },
           "maker": {
             "type": "string",
-            "examples": ["8iJxVDtFxnWpdCvdrgNDSXigxHo9vLf7KCS1pNKrs5Nh"]
+            "examples": [
+              "8iJxVDtFxnWpdCvdrgNDSXigxHo9vLf7KCS1pNKrs5Nh"
+            ]
           },
           "prioritizationFeeToUse": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "Total fees in lamports to be paid when building the transaction\nMMs to return us the fees they want to use either the suggested_fees in the quote request or a custom amount",
-            "examples": ["10000"],
+            "examples": [
+              "10000"
+            ],
             "minimum": 0
           },
-          "protocol": { "$ref": "#/components/schemas/Protocol" },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
           "quoteId": {
             "type": "string",
-            "examples": ["59db3e19-c7b0-4753-a8aa-206701004498"]
+            "examples": [
+              "59db3e19-c7b0-4753-a8aa-206701004498"
+            ]
           },
-          "quoteType": { "$ref": "#/components/schemas/QuoteType" },
+          "quoteType": {
+            "$ref": "#/components/schemas/QuoteType"
+          },
           "requestId": {
             "type": "string",
-            "examples": ["629bddf3-0038-43a6-8956-f5433d6b1191"]
+            "examples": [
+              "629bddf3-0038-43a6-8956-f5433d6b1191"
+            ]
           },
           "taker": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Taker is optional here as there are times we want to just get a quote without user signing in",
-            "examples": ["5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"]
+            "examples": [
+              "5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"
+            ]
           },
           "tokenIn": {
             "type": "string",
-            "examples": ["So11111111111111111111111111111111111111112"]
+            "examples": [
+              "So11111111111111111111111111111111111111112"
+            ]
           },
           "tokenOut": {
             "type": "string",
-            "examples": ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"]
+            "examples": [
+              "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            ]
           }
         }
       },
-      "QuoteType": { "type": "string", "enum": ["exactIn", "exactOut"] },
+      "QuoteType": {
+        "type": "string",
+        "enum": [
+          "exactIn",
+          "exactOut"
+        ]
+      },
       "SwapRequest": {
         "type": "object",
         "description": "Order to be fulfilled by the Market Maker",
-        "required": ["requestId", "quoteId", "transaction"],
+        "required": [
+          "requestId",
+          "quoteId",
+          "transaction"
+        ],
         "properties": {
           "quoteId": {
             "type": "string",
-            "examples": ["59db3e19-c7b0-4753-a8aa-206701004498"]
+            "examples": [
+              "59db3e19-c7b0-4753-a8aa-206701004498"
+            ]
           },
           "requestId": {
             "type": "string",
-            "examples": ["629bddf3-0038-43a6-8956-f5433d6b1191"]
+            "examples": [
+              "629bddf3-0038-43a6-8956-f5433d6b1191"
+            ]
           },
           "transaction": {
             "type": "string",
@@ -319,19 +451,32 @@
       "SwapResponse": {
         "type": "object",
         "description": "Response to a swap request to the Market Maker",
-        "required": ["quoteId", "state"],
+        "required": [
+          "quoteId",
+          "state"
+        ],
         "properties": {
           "quoteId": {
             "type": "string",
-            "examples": ["59db3e19-c7b0-4753-a8aa-206701004498"]
+            "examples": [
+              "59db3e19-c7b0-4753-a8aa-206701004498"
+            ]
           },
           "rejectionReason": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional message to provide more context when the swap is rejected"
           },
-          "state": { "$ref": "#/components/schemas/SwapState" },
+          "state": {
+            "$ref": "#/components/schemas/SwapState"
+          },
           "txSignature": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "deprecated": true,
             "examples": [
               "5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"
@@ -339,7 +484,13 @@
           }
         }
       },
-      "SwapState": { "type": "string", "enum": ["accepted", "rejected"] }
+      "SwapState": {
+        "type": "string",
+        "enum": [
+          "accepted",
+          "rejected"
+        ]
+      }
     }
   },
   "tags": [

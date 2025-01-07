@@ -14,13 +14,10 @@ pub struct QuoteRequest {
     #[schema(examples("So11111111111111111111111111111111111111112"))]
     pub token_in: String,
     #[schema(examples("250000000"))]
-    pub amount_in: String, //
-    #[schema(examples("250000000"))]
-    #[deprecated = "Use amount_in instead"]
-    pub amount: String, // TODO: deprecate this in favor of amount_in
+    pub amount: String,
     #[schema(examples("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"))]
     pub token_out: String,
-    #[schema(examples("ExactIn"), read_only = true)]
+    #[schema(examples("exactIn"), read_only = true)]
     pub quote_type: QuoteType,
     #[schema(examples("v1"), read_only = true)]
     pub protocol: Protocol,
