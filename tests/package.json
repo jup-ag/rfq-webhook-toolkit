@@ -12,7 +12,8 @@
     "vitest": "^2.1.5"
   },
   "scripts": {
-    "acceptance": "vitest run ./suites/acceptance"
+    "acceptance": "vitest run ./suites/acceptance",
+    "integration": "vitest run ./suites/integration"
   },
   "dependencies": {
     "bn.js": "^5.2.1",
