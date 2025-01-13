@@ -4,54 +4,32 @@ import { assert } from 'chai';
 const BN = require('bn.js');
 const solanaWeb3 = require('@solana/web3.js');
 const fs = require('fs');
+import * as params from '../../params';
 
-
-
-// Base API URL, load from environment variable or use default
-const QUOTE_SERVICE_URL = process.env.QUOTE_SERVICE_URL || 'https://quote-proxy-edge.raccoons.dev';
-const WEBHOOK_ID = process.env.WEBHOOK_ID || false; // webhook id
-const TAKER_KEYPAIR = process.env.TAKER_KEYPAIR || "keypair.json"; // taker private key
-const AMOUNT = process.env.AMOUNT || 1_000_000; // swap 1 USDC for SOL
-const INPUT_MINT = process.env.INPUT_MINT || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC
-const OUTPUT_MINT = process.env.OUTPUT_MINT || 'So11111111111111111111111111111111111111112'; // wSOL (will be converted to native SOL)
-
-// optional fields
-const SWAP_MODE = process.env.SWAP_MODE || 'exactIn'; // 'exactIn' or 'exactOut'
-
-// Helper function to validate Solana addresses
-function isValidSolanaAddress(address) {
-  try {
-    // Attempt to create a PublicKey, which validates the address format
-    new solanaWeb3.PublicKey(address);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
 
 // Start mock server before tests and close it after
-describe('Webhook EDGE API Quote', () => {
-  it('should return a successful quote response', async () => {
+describe('Webhook EDGE API Swap', () => {
+  it('should execute a successful swap', async () => {
 
-    assert(WEBHOOK_ID, 'WEBHOOK_ID is not set');
-    assert(TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
+    assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
+    assert(params.TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
 
     // Read the keypair
-    const keypair = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(TAKER_KEYPAIR, 'utf8'))));
+    const keypair = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(params.TAKER_KEYPAIR, 'utf8'))));
     const taker = keypair.publicKey.toString();
     console.log('taker address: ', taker);
 
-    const quoteURL = `${QUOTE_SERVICE_URL}/quote`;
+    const quoteURL = `${params.QUOTE_SERVICE_URL}/quote`;
     console.log('request url: ', quoteURL);
 
     const quoteParams = {
-      swapMode: SWAP_MODE, // TODO:  check this field
+      swapMode: params.SWAP_MODE, // TODO:  check this field
       taker: taker,
-      inputMint: INPUT_MINT,
-      outputMint: OUTPUT_MINT,
-      amount: `${AMOUNT}`,
+      inputMint: params.INPUT_MINT,
+      outputMint: params.OUTPUT_MINT,
+      amount: `${params.AMOUNT}`,
       swapType: 'rfq',
-      webhookId: WEBHOOK_ID,
+      webhookId: params.WEBHOOK_ID,
     }
 
     let response = await axios.get(quoteURL, { params: quoteParams });
@@ -65,10 +43,10 @@ describe('Webhook EDGE API Quote', () => {
     expect(response.data).toHaveProperty('orderInfo');
     expect(response.data).toHaveProperty('maker'); // the maker should be the MM address
     expect(response.data).toHaveProperty('orderInfo');
-    expect(response.data.orderInfo.input.startAmount).toBe(`${AMOUNT}`);
-    expect(response.data.orderInfo.input.token).toBe(INPUT_MINT);
+    expect(response.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
+    expect(response.data.orderInfo.input.token).toBe(params.INPUT_MINT);
     expect(new BN(response.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
-    expect(response.data.orderInfo.output.token).toBe(OUTPUT_MINT);
+    expect(response.data.orderInfo.output.token).toBe(params.OUTPUT_MINT);
 
 
     const base64Transaction = response.data.transaction;
@@ -85,7 +63,7 @@ describe('Webhook EDGE API Quote', () => {
     const signedTransactionBase64 = Buffer.from(transaction.serialize()).toString('base64');
 
     // Send the swap transaction
-    const swapURL = `${QUOTE_SERVICE_URL}/swap`;
+    const swapURL = `${params.QUOTE_SERVICE_URL}/swap`;
 
     const swapPayload = {
       quoteId: response.data.quoteId,
