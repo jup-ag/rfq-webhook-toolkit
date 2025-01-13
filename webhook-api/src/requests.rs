@@ -26,7 +26,7 @@ pub struct QuoteRequest {
     #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
     pub taker: Option<String>,
     /// If no taker is provided, the there will be no suggested fee
-    /// This is the suggested total fees in lamports to be paid when building the transaction
+    /// This is the suggested compute unit price in micro lamports to be set when building the transaction
     /// MMs will have the option to ignore our suggested fee and provide their own when responding to this quote
     #[schema(examples("10000"))]
     pub suggested_prioritization_fees: Option<u64>,

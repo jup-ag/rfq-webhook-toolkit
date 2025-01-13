@@ -25,8 +25,9 @@ pub struct QuoteResponse {
     pub amount_out: String,
     #[schema(examples("8iJxVDtFxnWpdCvdrgNDSXigxHo9vLf7KCS1pNKrs5Nh"))]
     pub maker: String,
-    /// Total fees in lamports to be paid when building the transaction
-    /// MMs to return us the fees they want to use either the suggested_fees in the quote request or a custom amount
+    /// Prioritization fee compute unit price in micro lamports to be set in the fill transaction
+    /// It is estimated using https://docs.triton.one/chains/solana/improved-priority-fees-api 50th percentile, mean priority fee over the last 20 slots
+    /// MMs to return us the fees they want to use either the suggested_prioritization_fees in the quote request or a custom amount
     #[schema(examples("10000"))]
     pub prioritization_fee_to_use: Option<u64>,
     /// Taker is optional here as there are times we want to just get a quote without user signing in
