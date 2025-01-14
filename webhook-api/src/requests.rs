@@ -27,7 +27,7 @@ pub struct QuoteRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub taker: Option<String>,
     /// If no taker is provided, the there will be no suggested fee
-    /// This is the suggested total fees in lamports to be paid when building the transaction
+    /// This is the suggested compute unit price in micro lamports to be set when building the transaction
     /// MMs will have the option to ignore our suggested fee and provide their own when responding to this quote
     #[schema(examples("10000"))]
     #[serde(skip_serializing_if = "Option::is_none")]

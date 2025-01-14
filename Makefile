@@ -4,7 +4,7 @@ run-example-server:
 	cargo run --package server-example
 
 
-prepare-acceptance-tests:
+prepare-tests:
 	cd tests && pnpm install
 
 run-acceptance-tests:
@@ -35,6 +35,11 @@ run-acceptance-tests-against-sample-server:
 	  echo "Health endpoint is ready! Running acceptance tests"; \
 	  make run-acceptance-tests; \
 	)
+
+
+run-integration-tests:
+	cd tests && pnpm run integration
+
 
 update-openapi-spec:
 	@echo "Running the example server to update the openapi docs" && \
