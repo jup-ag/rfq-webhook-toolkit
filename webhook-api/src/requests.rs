@@ -24,11 +24,13 @@ pub struct QuoteRequest {
     /// Taker is optional here as there are times we want to just get a quote without user signing in
     /// When user signs in, we should try to requote again so the new quote request will have a taker
     #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub taker: Option<String>,
     /// If no taker is provided, the there will be no suggested fee
     /// This is the suggested compute unit price in micro lamports to be set when building the transaction
     /// MMs will have the option to ignore our suggested fee and provide their own when responding to this quote
     #[schema(examples("10000"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub suggested_prioritization_fees: Option<u64>,
 }
 
