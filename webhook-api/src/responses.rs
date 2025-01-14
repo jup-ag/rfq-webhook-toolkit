@@ -29,17 +29,13 @@ pub struct QuoteResponse {
     /// It is estimated using https://docs.triton.one/chains/solana/improved-priority-fees-api 50th percentile, mean priority fee over the last 20 slots
     /// MMs to return us the fees they want to use either the suggested_prioritization_fees in the quote request or a custom amount
     #[schema(examples("10000"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prioritization_fee_to_use: Option<u64>,
     /// Taker is optional here as there are times we want to just get a quote without user signing in
     #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub taker: Option<String>,
 }
-
-// #[derive(Clone, Debug, Deserialize, Serialize)]
-// pub enum RequestStatus {
-//     Accepted,
-//     Rejected,
-// }
 
 /// Response to a swap request to the Market Maker
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
@@ -50,8 +46,10 @@ pub struct SwapResponse {
     #[schema(examples("accepted", "rejected"))]
     pub state: SwapState,
     #[schema(examples("5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"), deprecated)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tx_signature: Option<String>,
     /// Optional message to provide more context when the swap is rejected
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rejection_reason: Option<String>,
 }
 
