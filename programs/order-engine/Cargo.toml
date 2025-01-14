@@ -28,7 +28,7 @@ check-cfg = [
 
 [dependencies]
 anchor-lang = { workspace = true }
-anchor-spl = { workspace = true }
+anchor-spl = { workspace = true, features = ["token_2022"] }
 test-case = { workspace = true }
 
 [dev-dependencies]

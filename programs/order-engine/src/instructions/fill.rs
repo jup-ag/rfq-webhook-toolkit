@@ -5,7 +5,13 @@ use anchor_spl::{
         self,
         spl_token::{self, native_mint},
     },
-    token_interface::{TokenAccount, TokenInterface},
+    token_2022::spl_token_2022::{
+        self,
+        extension::{
+            transfer_fee::TransferFeeConfig, BaseStateWithExtensions, StateWithExtensions,
+        },
+    },
+    token_interface::{self, spl_pod::primitives::PodU16, TokenAccount, TokenInterface},
 };
 
 use crate::error::OrderEngineError;
@@ -73,19 +79,14 @@ pub fn handle_fill<'c: 'info, 'info>(
                 input_amount,
             )?;
         }
-        (Some(taker_input_mint_token_account), Some(maker_input_mint_token_account)) => {
-            token::transfer(
-                CpiContext::new(
-                    ctx.accounts.input_token_program.to_account_info(),
-                    token::Transfer {
-                        from: taker_input_mint_token_account.to_account_info(),
-                        to: maker_input_mint_token_account.to_account_info(),
-                        authority: ctx.accounts.taker.to_account_info(),
-                    },
-                ),
-                input_amount,
-            )?;
-        }
+        (Some(taker_input_mint_token_account), Some(maker_input_mint_token_account)) => transfer(
+            ctx.accounts.input_token_program.to_account_info(),
+            taker_input_mint_token_account.to_account_info(),
+            maker_input_mint_token_account.to_account_info(),
+            ctx.accounts.taker.to_account_info(),
+            ctx.accounts.input_mint.to_account_info(),
+            input_amount,
+        )?,
     }
 
     match (
@@ -141,22 +142,75 @@ pub fn handle_fill<'c: 'info, 'info>(
                 },
             ))?;
         }
-        (Some(maker_output_mint_token_account), Some(taker_output_mint_token_account)) => {
-            token::transfer(
-                CpiContext::new(
-                    ctx.accounts.output_token_program.to_account_info(),
-                    token::Transfer {
-                        from: maker_output_mint_token_account.to_account_info(),
-                        to: taker_output_mint_token_account.to_account_info(),
-                        authority: ctx.accounts.maker.to_account_info(),
-                    },
-                ),
-                output_amount,
-            )?;
-        }
+        (Some(maker_output_mint_token_account), Some(taker_output_mint_token_account)) => transfer(
+            ctx.accounts.output_token_program.to_account_info(),
+            maker_output_mint_token_account.to_account_info(),
+            taker_output_mint_token_account.to_account_info(),
+            ctx.accounts.maker.to_account_info(),
+            ctx.accounts.output_mint.to_account_info(),
+            output_amount,
+        )?,
     }
 
     Ok(())
+}
+
+fn transfer<'info>(
+    token_program: AccountInfo<'info>,
+    from: AccountInfo<'info>,
+    to: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    amount: u64,
+) -> Result<()> {
+    let decimals_for_transfer_checked = if token_program.key.eq(&spl_token_2022::ID) {
+        let mint_data = mint.try_borrow_data()?;
+        let mint_state_with_extensions =
+            StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+
+        if let Ok(transfer_fee_config) =
+            mint_state_with_extensions.get_extension::<TransferFeeConfig>()
+        {
+            require!(
+                transfer_fee_config
+                    .get_epoch_fee(Clock::get()?.epoch)
+                    .transfer_fee_basis_points
+                    == PodU16([0; 2]),
+                OrderEngineError::Token2022MintExtensionNotSupported
+            );
+        }
+
+        Some(mint_state_with_extensions.base.decimals)
+    } else {
+        None
+    };
+
+    match decimals_for_transfer_checked {
+        Some(decimals) => token_interface::transfer_checked(
+            CpiContext::new(
+                token_program,
+                token_interface::TransferChecked {
+                    from,
+                    mint,
+                    to,
+                    authority,
+                },
+            ),
+            amount,
+            decimals,
+        ),
+        None => token::transfer(
+            CpiContext::new(
+                token_program,
+                token::Transfer {
+                    from,
+                    to,
+                    authority,
+                },
+            ),
+            amount,
+        ),
+    }
 }
 
 #[derive(Accounts)]
@@ -202,6 +256,7 @@ pub struct Fill<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn unwrap_sol<'info>(
     maker: AccountInfo<'info>,
     sender: AccountInfo<'info>,
