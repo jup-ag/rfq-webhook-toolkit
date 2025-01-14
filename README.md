@@ -143,11 +143,13 @@ Note: These expiry thresholds may be adjusted based on performance and feedback.
 
 ## Advertising supported tokens
 
-In order to receive meaningful quote requests, market makers need to advertise the tokens they support. This is done by providing a list of supported tokens in the response to the `/tokens` endpoint. The response should be a JSON array of token addresses, to add or remove to the list of supported tokens for the webhook.
+In order to receive relevant quote requests, market makers need to advertise the tokens they support. This is done by providing a list of supported tokens in the response to the `/tokens` route. The response should be a JSON array of token addresses. The list of tokens is refreshed every 10 minutes. 
 
-The following list of tokens will always be included in the request:
+By default, webhooks will be always asked to quote for the following tokens
 
-- TBD (the list will be published once ready)
+- SOL
+- USDC
+
 
 ## Technical integration
 
