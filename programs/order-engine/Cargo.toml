@@ -29,7 +29,6 @@ check-cfg = [
 [dependencies]
 anchor-lang = { workspace = true }
 anchor-spl = { workspace = true, features = ["token_2022"] }
-test-case = { workspace = true }
 
 [dev-dependencies]
 solana-sdk = { workspace = true }
@@ -38,3 +37,4 @@ bincode = { workspace = true }
 spl-token-client = { workspace = true }
 assert_matches = { workspace = true }
 itertools = { workspace = true }
+test-case = { workspace = true }
