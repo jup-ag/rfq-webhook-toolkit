@@ -294,7 +294,7 @@
               "null"
             ],
             "format": "int64",
-            "description": "If no taker is provided, the there will be no suggested fee\nThis is the suggested total fees in lamports to be paid when building the transaction\nMMs will have the option to ignore our suggested fee and provide their own when responding to this quote",
+            "description": "If no taker is provided, the there will be no suggested fee\nThis is the suggested compute unit price in micro lamports to be set when building the transaction\nMMs will have the option to ignore our suggested fee and provide their own when responding to this quote",
             "examples": [
               "10000"
             ],
@@ -363,7 +363,7 @@
               "null"
             ],
             "format": "int64",
-            "description": "Total fees in lamports to be paid when building the transaction\nMMs to return us the fees they want to use either the suggested_fees in the quote request or a custom amount",
+            "description": "Prioritization fee compute unit price in micro lamports to be set in the fill transaction\nIt is estimated using https://docs.triton.one/chains/solana/improved-priority-fees-api 50th percentile, mean priority fee over the last 20 slots\nMMs to return us the fees they want to use either the suggested_prioritization_fees in the quote request or a custom amount",
             "examples": [
               "10000"
             ],
