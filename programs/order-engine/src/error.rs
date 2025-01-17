@@ -5,4 +5,5 @@ pub enum OrderEngineError {
     InvalidCalculation,
     MissingTemporaryWrappedSolTokenAccount,
     Token2022MintExtensionNotSupported,
+    FeeBpsOutOfRange,
 }

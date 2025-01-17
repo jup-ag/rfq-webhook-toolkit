@@ -227,6 +227,7 @@ impl TestEnvironment {
             input_amount: *input_amount,
             output_amount: *output_amount,
             expire_at: i64::MAX,
+            fee_bps: 0,
         }
         .data();
 

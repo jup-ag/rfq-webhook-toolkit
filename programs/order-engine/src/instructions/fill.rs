@@ -23,8 +23,10 @@ pub fn handle_fill<'c: 'info, 'info>(
     input_amount: u64,
     output_amount: u64,
     expire_at: i64,
+    fee_bps: u16,
 ) -> Result<()> {
     require_gte!(expire_at, Clock::get()?.unix_timestamp);
+    require!(fee_bps < 10_000, OrderEngineError::FeeBpsOutOfRange); // can't be more than 100%
 
     match (
         &ctx.accounts.taker_input_mint_token_account,
@@ -322,7 +324,7 @@ fn unwrap_sol<'info>(
     ))?;
 
     if let Some(receiver) = receiver {
-        // Transfer native sol to receipient
+        // Transfer native sol to recipient
         system_program::transfer(
             CpiContext::new(
                 system_program,

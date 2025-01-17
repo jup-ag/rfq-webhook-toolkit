@@ -23,7 +23,8 @@ pub mod order_engine {
         input_amount: u64,
         output_amount: u64,
         expire_at: i64,
+        fee_bps: u16,
     ) -> Result<()> {
-        handle_fill(ctx, input_amount, output_amount, expire_at)
+        handle_fill(ctx, input_amount, output_amount, expire_at, fee_bps)
     }
 }
