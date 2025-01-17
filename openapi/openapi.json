@@ -261,7 +261,8 @@
           "amount",
           "tokenOut",
           "quoteType",
-          "protocol"
+          "protocol",
+          "feeBps"
         ],
         "properties": {
           "amount": {
@@ -269,6 +270,17 @@
             "examples": [
               "250000000"
             ]
+          },
+          "feeBps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Fee in basis points to be charged by the Market Maker",
+            "examples": [
+              "1",
+              "20"
+            ],
+            "maximum": 10000,
+            "minimum": 0
           },
           "protocol": {
             "$ref": "#/components/schemas/Protocol"
