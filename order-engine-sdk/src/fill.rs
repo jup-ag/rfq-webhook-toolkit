@@ -18,6 +18,7 @@ pub struct Order {
     pub out_amount: u64,
     pub output_mint: Pubkey,
     pub expire_at: i64,
+    pub fee_bps: u16,
 }
 
 pub struct ValidatedFill {
@@ -145,6 +146,7 @@ pub struct ValidatedSimilarFill {
     pub input_mint: Pubkey,
     pub taker_input_mint_token_account: Pubkey,
     pub expire_at: i64,
+    pub fee_bps: u16,
 }
 
 /// Given the original sanitized message, allow some minor changes
@@ -273,6 +275,7 @@ pub fn validate_similar_fill_sanitized_message(
                 input_mint: *input_mint,
                 taker_input_mint_token_account: *taker_input_mint_token_account,
                 expire_at: fill_ix.expire_at,
+                fee_bps: fill_ix.fee_bps,
             })
         }
     }
