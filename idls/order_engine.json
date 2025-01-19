@@ -78,10 +78,6 @@
         {
           "name": "expire_at",
           "type": "i64"
-        },
-        {
-          "name": "fee_bps",
-          "type": "u16"
         }
       ]
     }
