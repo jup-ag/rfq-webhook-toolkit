@@ -97,7 +97,7 @@ pub fn validate_fill_sanitized_message(
 
             ensure!(data.len() >= 8, "Not enough data in fill instruction");
             // Must slice off anchor's discriminator first
-            let (discriminator, ix_data) = data.split_at(8);
+            let (discriminator, mut ix_data) = data.split_at(8);
             ensure!(
                 discriminator == order_engine::client::args::Fill::DISCRIMINATOR,
                 "Not a fill discriminator"
@@ -116,7 +116,7 @@ pub fn validate_fill_sanitized_message(
             ensure!(input_mint == &order.input_mint, "Invalid input mint");
             ensure!(output_mint == &order.output_mint, "Invalid output mint");
 
-            let fill_ix = order_engine::client::args::Fill::try_from_slice(ix_data)
+            let fill_ix = order_engine::client::args::Fill::deserialize(&mut ix_data)
                 .map_err(|e| anyhow!("Invalid fill ix data {e}"))?;
 
             // Check the input and output amount
@@ -250,13 +250,13 @@ pub fn validate_similar_fill_sanitized_message(
                 "Duplicated fill instruction"
             );
             ensure!(data.len() >= 8, "Not enough data in fill instruction");
-            let (discriminator, ix_data) = data.split_at(8);
+            let (discriminator, mut ix_data) = data.split_at(8);
             ensure!(
                 discriminator == order_engine::client::args::Fill::DISCRIMINATOR,
                 "Not a fill discriminator"
             );
 
-            let fill_ix = order_engine::client::args::Fill::try_from_slice(ix_data)
+            let fill_ix = order_engine::client::args::Fill::deserialize(&mut ix_data)
                 .map_err(|e| anyhow!("Invalid fill ix data {e}"))?;
             // We check if the taker has enough balance to fill the order first
             let taker = accounts.first().context("Invalid fill ix data")?.pubkey;

@@ -32,6 +32,9 @@ pub struct QuoteRequest {
     #[schema(examples("10000"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub suggested_prioritization_fees: Option<u64>,
+    /// Fee in basis points to be charged by the Market Maker
+    #[schema(examples("1", "20"), maximum = 10_000)]
+    pub fee_bps: u16,
 }
 
 /// Order to be fulfilled by the Market Maker

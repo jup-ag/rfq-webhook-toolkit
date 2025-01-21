@@ -223,12 +223,16 @@ impl TestEnvironment {
             temporary_wsol_token_account,
             ..
         } = self;
-        let data = order_engine::instruction::Fill {
+        let mut data = order_engine::instruction::Fill {
             input_amount: *input_amount,
             output_amount: *output_amount,
             expire_at: i64::MAX,
         }
         .data();
+
+        // TODO: unused data to track fee_bps
+        let fee_bps: u16 = 0;
+        data.extend(fee_bps.to_le_bytes());
 
         let mut instruction = Instruction {
             program_id: order_engine::ID,
