@@ -71,3 +71,7 @@ utoipauto = "0.2.0"
 # anchor 0.30.1 but point to the version before solana 2.1
 anchor-lang = { git = "https://github.com/coral-xyz/anchor.git", rev = "4cdb0ebe8f613f7dbbd5c4b00571139b2517898f" }
 anchor-spl = { git = "https://github.com/coral-xyz/anchor.git", rev = "4cdb0ebe8f613f7dbbd5c4b00571139b2517898f" }
+
+[patch.crates-io.spl-associated-token-account-client]
+git = "https://github.com/solana-labs/solana-program-library.git"
+rev = "b27a96a78cff878ecf9312dbd1b31912cfcb2c0c"

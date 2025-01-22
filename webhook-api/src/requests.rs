@@ -26,7 +26,7 @@ pub struct QuoteRequest {
     #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub taker: Option<String>,
-    /// If no taker is provided, the there will be no suggested fee
+    /// If no taker is provided, there will be no suggested fee
     /// This is the suggested compute unit price in micro lamports to be set when building the transaction
     /// MMs will have the option to ignore our suggested fee and provide their own when responding to this quote
     #[schema(examples("10000"))]
@@ -35,6 +35,9 @@ pub struct QuoteRequest {
     /// Fee in basis points to be charged by the Market Maker
     #[schema(examples("1", "20"), maximum = 10_000)]
     pub fee_bps: u16,
+    /// The taker expects wrapped SOL when trading the WSOL mint as input or output mint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_wrapped_sol: Option<bool>,
 }
 
 /// Order to be fulfilled by the Market Maker

@@ -5980,8 +5980,7 @@ dependencies = [
 [[package]]
 name = "spl-associated-token-account-client"
 version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c5c1e2d53941ea7ebc4be3f86302a3c6c5178baa932bbc038468429e6900d36"
+source = "git+https://github.com/solana-labs/solana-program-library.git?rev=b27a96a78cff878ecf9312dbd1b31912cfcb2c0c#b27a96a78cff878ecf9312dbd1b31912cfcb2c0c"
 dependencies = [
  "solana-program",
 ]
