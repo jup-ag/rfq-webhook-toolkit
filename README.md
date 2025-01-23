@@ -182,3 +182,7 @@ Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without b
 ##### Does RFQ supports native SOL? 
 
 The RFQ program supports only wrapped SOL, but it performs the wrapping/unwrapping automatically for the user. 
+
+##### Do faster quotes receive priority?
+
+The RFQ system dispatches the quote request to all registered webhooks simultaneously with a 500ms timeout. During this time, all received quotes are compared to select the best one. The selection prioritizes the quote value first. If two quotes have identical values, the quote from the webhook with the faster response time will be chosen.
