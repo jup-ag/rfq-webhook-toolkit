@@ -176,3 +176,9 @@ Some market makers may not wish to be the ones handling the sending of transacti
 ### Fees
 
 Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without being subject to the volatility of on-chain gas prices or chain health. RFQ fills are also much less CU intensive (<10x) compared to AMM swaps, and can save gas in the long run on fills. Today, RFQ charges a 2bps flat fee on all volume (doesn't matter tokens or size). Expect this to go more dynamic to allow MMs to have an edge on all swap sizes and pairs in the future.
+
+## FAQ
+
+##### Does RFQ supports native SOL? 
+
+The RFQ program supports only wrapped SOL, but it performs the wrapping/unwrapping automatically for the user. 
