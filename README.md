@@ -175,4 +175,4 @@ Some market makers may not wish to be the ones handling the sending of transacti
 
 ### Fees
 
-We will likely introduce a fee in the range bps applied to the MM, based on total filled volume. More details to be announced on the introduction of fees on Jupiter RFQ. Currently, we welcome all MMs to integrate Jupiter RFQ with 0 fees for a limited, testing period.
+Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without being subject to the volatility of on-chain gas prices or chain health. RFQ fills are also much less CU intensive (<10x) compared to AMM swaps, and can save gas in the long run on fills. Today, RFQ charges a 2bps flat fee on all volume (doesn't matter tokens or size). Expect this to go more dynamic to allow MMs to have an edge on all swap sizes and pairs in the future.
