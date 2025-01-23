@@ -8,7 +8,9 @@ import * as params from '../../params';
 
 
 // Start mock server before tests and close it after
-describe('Webhook EDGE API Swap', () => {
+describe('Webhook EDGE API Swap', {
+  timeout: 10_000,
+},() => {
   it('should execute a successful swap', async () => {
 
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
@@ -32,57 +34,65 @@ describe('Webhook EDGE API Swap', () => {
       webhookId: params.WEBHOOK_ID,
     }
 
-    let response = await axios.get(quoteURL, { params: quoteParams });
+    try {
+      // Step 1: Fetch the quote
+      const quoteResponse = await axios.get(quoteURL, { params: quoteParams });
+      console.log("Quote response --> ", quoteResponse.data);
 
-    console.log("response --> ", response.data);
+      // Assertions for the quote response
+      expect(quoteResponse.status).toBe(200);
+      expect(quoteResponse.data).toHaveProperty('quoteId');
+      expect(quoteResponse.data).toHaveProperty('requestId');
+      expect(quoteResponse.data).toHaveProperty('expireAt');
+      expect(quoteResponse.data).toHaveProperty('orderInfo');
+      expect(quoteResponse.data).toHaveProperty('maker');
+      expect(quoteResponse.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
+      expect(quoteResponse.data.orderInfo.input.token).toBe(params.INPUT_MINT);
+      expect(new BN(quoteResponse.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
+      expect(quoteResponse.data.orderInfo.output.token).toBe(params.OUTPUT_MINT);
 
-    expect(response.status).toBe(200);
-    expect(response.data).toHaveProperty('quoteId');
-    expect(response.data).toHaveProperty('requestId');
-    expect(response.data).toHaveProperty('expireAt');
-    expect(response.data).toHaveProperty('orderInfo');
-    expect(response.data).toHaveProperty('maker'); // the maker should be the MM address
-    expect(response.data).toHaveProperty('orderInfo');
-    expect(response.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
-    expect(response.data.orderInfo.input.token).toBe(params.INPUT_MINT);
-    expect(new BN(response.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
-    expect(response.data.orderInfo.output.token).toBe(params.OUTPUT_MINT);
+      // Step 2: Transaction signing
+      const base64Transaction = quoteResponse.data.transaction;
+      expect(base64Transaction).toBeDefined();
 
+      const transactionBytes = Buffer.from(base64Transaction, 'base64');
+      const transaction = solanaWeb3.VersionedTransaction.deserialize(transactionBytes);
+      transaction.sign([keypair]);
+      const signedTransactionBase64 = Buffer.from(transaction.serialize()).toString('base64');
 
-    const base64Transaction = response.data.transaction;
-    expect(base64Transaction).toBeDefined();
-    // sign the transaction
+      // Step 3: Send the swap transaction
+      const swapURL = `${params.QUOTE_SERVICE_URL}/swap`;
+      const swapPayload = {
+        quoteId: quoteResponse.data.quoteId,
+        requestId: quoteResponse.data.requestId,
+        transaction: signedTransactionBase64,
+      };
+      const swapParams = { swapType: 'rfq' };
+      console.log("Swap payload --> ", swapPayload);
 
-    const transactionBytes = Buffer.from(base64Transaction, 'base64');
+      const swapResponse = await axios.post(swapURL, swapPayload, { params: swapParams });
+      console.log("Swap response --> ", swapResponse.data);
 
-    // Deserialize the transaction
-    const transaction = solanaWeb3.VersionedTransaction.deserialize(transactionBytes);
+      // Assertions for the swap response
+      expect(swapResponse.status).toBe(200);
+      expect(swapResponse.data.quoteId).toBe(swapPayload.quoteId);
+      expect(swapResponse.data.state).toBe("accepted");
 
-    // Sign the transaction
-    transaction.sign([keypair]);
-    const signedTransactionBase64 = Buffer.from(transaction.serialize()).toString('base64');
-
-    // Send the swap transaction
-    const swapURL = `${params.QUOTE_SERVICE_URL}/swap`;
-
-    const swapPayload = {
-      quoteId: response.data.quoteId,
-      requestId: response.data.requestId,
-      transaction: signedTransactionBase64
-    };
-
-    const swapParams = {
-      swapType: 'rfq',
-    };
-
-    console.log(swapPayload);
-
-    response = await axios.post(swapURL, swapPayload, { params: swapParams });
-
-    console.log("response --> ", response.data);
-    expect(response.status).toBe(200);
-    expect(response.data.quoteId).toBe(swapPayload.quoteId);
-    expect(response.data.state).toBe("accepted");
-
+    } catch (error) {
+      if (error.response) {
+        console.error("Error from request: ", error.config.url);
+        console.log("Error response data --> ", error.response.data);
+        assert.fail(
+          `Request to ${error.config.url} failed with status ${error.response.status}: ${error.response.data.error}`
+        );
+      } else if (error.request) {
+        console.error("Error from request: ", error.config.url);
+        console.log("Error request --> ", error.request);
+        assert.fail(`Request to ${error.config.url} failed: no response from server`);
+      } else {
+        console.log("Error --> ", error);
+        assert.fail("Unknown error occurred");
+      }
+    }
   });
 });
