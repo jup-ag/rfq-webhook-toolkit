@@ -4514,6 +4514,7 @@ dependencies = [
  "clap 4.5.23",
  "dotenvy",
  "futures",
+ "once_cell",
  "reqwest 0.12.4",
  "serde",
  "serde_json",
