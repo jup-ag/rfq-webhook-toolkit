@@ -32,20 +32,34 @@ describe('Webhook EDGE API Quote', () => {
       webhookId: params.WEBHOOK_ID,
     }
 
-    const response = await axios.get(url, { params: payload });
+    const response = await axios.get(url, { params: payload })
+    .then((response) => {
+      console.log("response --> ", response.data);
+      expect(response.status).toBe(200);
+      expect(response.data).toHaveProperty('quoteId');
+      expect(response.data).toHaveProperty('requestId');
+      expect(response.data).toHaveProperty('expireAt');
+      expect(response.data).toHaveProperty('orderInfo');
+      expect(response.data).toHaveProperty('maker'); // the maker should be the MM address
+      expect(response.data).toHaveProperty('orderInfo');
+      expect(response.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
+      expect(response.data.orderInfo.input.token).toBe(params.INPUT_MINT);
+      expect(new BN(response.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
+      expect(response.data.orderInfo.output.token).toBe(params.OUTPUT_MINT);
+    })
+    .catch((error) => {
+      if(error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        assert.fail(`failed to get quote: unexpected response status ${error.response.status}: ${error.response.data.error}`);
+      } else if(error.request) {
+        console.log("error.request --> ", error.request.data);
+        assert.fail('failed to get quote: no response from server');
+      } else {
+        console.log("error --> ", error);
+        assert.fail('failed to get quote: unknown error');
+      }
+    });
 
-    console.log("response --> ", response.data);
 
-    expect(response.status).toBe(200);
-    expect(response.data).toHaveProperty('quoteId');
-    expect(response.data).toHaveProperty('requestId');
-    expect(response.data).toHaveProperty('expireAt');
-    expect(response.data).toHaveProperty('orderInfo');
-    expect(response.data).toHaveProperty('maker'); // the maker should be the MM address
-    expect(response.data).toHaveProperty('orderInfo');
-    expect(response.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
-    expect(response.data.orderInfo.input.token).toBe(params.INPUT_MINT);
-    expect(new BN(response.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
-    expect(response.data.orderInfo.output.token).toBe(params.OUTPUT_MINT);
   });
 });

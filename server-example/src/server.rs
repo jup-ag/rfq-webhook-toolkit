@@ -7,6 +7,7 @@
 ///
 ///
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use thiserror::Error;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -33,6 +34,14 @@ use tracing::Level as TraceLevel;
 use webhook_api::{enums::SwapState, requests::*, responses::*};
 
 use crate::config::Config;
+
+static SUPPORTED_TOKENS: Lazy<Vec<String>> = Lazy::new(|| {
+    vec![
+        "So11111111111111111111111111111111111111112".to_string(),
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(),
+        "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN".to_string(),
+    ]
+});
 
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -95,6 +104,7 @@ responses(
     (status = 200, body= QuoteResponse),
     (status = 400, body= ErrorResponse),
     (status = 401, body= ErrorResponse),
+    (status = 404, body= ErrorResponse),
     (status = 500, body= ErrorResponse),
     (status = 503, body= ErrorResponse),
 ))]
@@ -104,6 +114,13 @@ async fn example_quote(
     WithRejection(Json(quote_request), _): WithRejection<Json<QuoteRequest>, ApiError>,
 ) -> Result<Json<QuoteResponse>, ApiError> {
     tracing::info!("Received quote request: {:?}", quote_request);
+
+    // if the  the token pair is not supported, return 404
+    if !SUPPORTED_TOKENS.contains(&quote_request.token_in)
+        || !SUPPORTED_TOKENS.contains(&quote_request.token_out)
+    {
+        return Err(ApiError::NotFound());
+    }
 
     // The normal flow of a quote request would be:
     // Step 1: Parse the request
@@ -188,11 +205,7 @@ responses(
     (status = 400, body= ErrorResponse),
 ))]
 pub async fn example_tokens_list() -> Result<Json<Vec<String>>, ApiError> {
-    Ok(Json(vec![
-        "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN".to_string(),
-        "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3".to_string(),
-        "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv".to_string(),
-    ]))
+    Ok(Json(SUPPORTED_TOKENS.clone()))
 }
 
 async fn get_health() -> Result<(), ApiError> {
