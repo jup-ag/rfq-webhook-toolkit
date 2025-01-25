@@ -61,11 +61,18 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         let (status, message) = match self {
             Self::JsonExtractorRejection(json_rejection) => {
+                tracing::error!("JsonExtractorRejection: {:?}", json_rejection);
                 (json_rejection.status(), json_rejection.body_text())
             }
             Self::NotFound() => (StatusCode::NOT_FOUND, self.to_string()),
-            Self::BadRequest(error) => (StatusCode::BAD_REQUEST, error),
-            Self::GenericError(error) => (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+            Self::BadRequest(error) => {
+                tracing::error!("BadRequest: {:?}", error);
+                (StatusCode::BAD_REQUEST, error)
+            }
+            Self::GenericError(error) => {
+                tracing::error!("GenericError: {:?}", error);
+                (StatusCode::INTERNAL_SERVER_ERROR, error.to_string())
+            }
         };
 
         (status, Json(ErrorResponse::from(message))).into_response()

@@ -8,7 +8,7 @@ import * as params from '../../params';
 
 
 // Start mock server before tests and close it after
-describe('Webhook EDGE API Swap', {
+describe('Webhook e2e API Swap', {
   timeout: 10_000,
 },() => {
   it('should execute a successful swap', async () => {
@@ -30,6 +30,7 @@ describe('Webhook EDGE API Swap', {
       inputMint: params.INPUT_MINT,
       outputMint: params.OUTPUT_MINT,
       amount: `${params.AMOUNT}`,
+      feeBps: params.FEE_BPS,
       swapType: 'rfq',
       webhookId: params.WEBHOOK_ID,
     }
