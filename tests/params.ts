@@ -8,6 +8,7 @@ export const TAKER_KEYPAIR = process.env.TAKER_KEYPAIR || "keypair.json"; // tak
 export const AMOUNT = process.env.AMOUNT || 1_000_000; // swap 1 USDC for SOL
 export const INPUT_MINT = process.env.INPUT_MINT || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC
 export const OUTPUT_MINT = process.env.OUTPUT_MINT || 'So11111111111111111111111111111111111111112'; // wSOL (will be converted to native SOL)
+export const FEE_BPS = process.env.FEE_BPS || 0;
 
 // optional fields
-export const SWAP_MODE = process.env.SWAP_MODE || 'exactIn'; // 'exactIn' or 'exactOut'
+export const SWAP_MODE = process.env.SWAP_MODE || 'ExactIn'; // 'ExactIn' or 'ExactOut'

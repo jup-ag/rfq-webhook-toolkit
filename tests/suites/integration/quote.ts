@@ -8,7 +8,7 @@ import * as params from '../../params';
 
 
 // Start mock server before tests and close it after
-describe('Webhook EDGE API Quote', () => {
+describe('Webhook e2e API Quote', () => {
   it('should return a successful quote response', async () => {
 
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
@@ -28,6 +28,7 @@ describe('Webhook EDGE API Quote', () => {
       inputMint: params.INPUT_MINT,
       outputMint: params.OUTPUT_MINT,
       amount: `${params.AMOUNT}`,
+      feeBps: params.FEE_BPS,
       swapType: 'rfq',
       webhookId: params.WEBHOOK_ID,
     }
@@ -52,11 +53,10 @@ describe('Webhook EDGE API Quote', () => {
         console.log("error.response.data --> ", error.response.data);
         assert.fail(`failed to get quote: unexpected response status ${error.response.status}: ${error.response.data.error}`);
       } else if(error.request) {
-        console.log("error.request --> ", error.request.data);
-        assert.fail('failed to get quote: no response from server');
+        assert.fail(`failed to get quote: no response from server ${error.config.url}`);
       } else {
         console.log("error --> ", error);
-        assert.fail('failed to get quote: unknown error');
+        assert.fail(`failed to get quote: unknown error for ${error.config.url}`);
       }
     });
 
