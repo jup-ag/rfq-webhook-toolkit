@@ -152,7 +152,7 @@ To facilitate the integration, in this repository you will find a sample server 
 
 In addition, we provide a set of test suites to verify the implementation of the webhook. The tests, and their instructions, can be found in the [`tests`](./tests/) directory.
 
-### Fees
+## Fees
 
 > DRAFT
 
