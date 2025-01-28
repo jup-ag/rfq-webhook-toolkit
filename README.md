@@ -145,11 +145,6 @@ Note: These expiry thresholds may be adjusted based on performance and feedback.
 
 In order to receive relevant quote requests, market makers need to advertise the tokens they support. This is done by providing a list of supported tokens in the response to the `/tokens` route. The response should be a JSON array of token addresses. The list of tokens is refreshed every 10 minutes. 
 
-By default, webhooks will be always asked to quote for the following tokens
-
-- SOL
-- USDC
-
 
 ## Technical integration
 
@@ -157,6 +152,9 @@ To facilitate the integration, in this repository you will find a sample server 
 
 In addition, we provide a set of test suites to verify the implementation of the webhook. The tests, and their instructions, can be found in the [`tests`](./tests/) directory.
 
+### Fees
+
+Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without being subject to the volatility of on-chain gas prices or chain health. RFQ fills are also much less CU intensive (<10x) compared to AMM swaps, and can save gas in the long run on fills. Today, RFQ charges a dynamic fee that is selected based on factors like tokens and size. The dynamic fee amount is forwarded to webhooks in the quote request parameters and it is appended to the message data (2 additional bytes, u16). Note that thae fee is not part of the message itself, it is only appended as additional bytes.   
 
 ## Future considerations/plans
 
@@ -173,6 +171,4 @@ Current implementation enforces that Jupiter RFQ API will be the one crafting th
 
 Some market makers may not wish to be the ones handling the sending of transactions on chain. We may look into helping market makers land their transactions on chain in the future.
 
-### Fees
 
-Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without being subject to the volatility of on-chain gas prices or chain health. RFQ fills are also much less CU intensive (<10x) compared to AMM swaps, and can save gas in the long run on fills. Today, RFQ charges a dynamic fee that is selected based on factors like tokens and size. The dynamic fee amount is forwarded to webhooks in the quote request parameters and it is appended to the message data (2 additional bytes, u16). Note that thae fee is not part of the message itself, it is only appended as additional bytes.   
