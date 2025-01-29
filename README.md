@@ -174,3 +174,16 @@ Current implementation enforces that Jupiter RFQ API will be the one crafting th
 Some market makers may not wish to be the ones handling the sending of transactions on chain. We may look into helping market makers land their transactions on chain in the future.
 
 
+## FAQ
+
+##### Does RFQ support native SOL?
+
+Yes, native SOL is fully supported in the order-engine program for both the taker (user) and the maker. However, for now, we assume the maker will use WSOL (Wrapped SOL).
+
+##### Do faster quotes receive priority?
+
+No, the RFQ system dispatches the quote request to all registered webhooks simultaneously with a 500ms timeout. During this time, all received quotes are compared to select the best one. The selection prioritizes the quote value first. If two quotes have identical values, the quote from the webhook with the faster response time will be chosen.
+
+##### Shall a webhook verify swap requests?
+
+Yes, the RFQ system will verify the swap requests before forwarding them to the webhooks. However, webhooks are encouraged to verify the swap requests as well to ensure the integrity of the system. The checks that the RFQ system performs can be found in the [validate_similar_fill_sanitized_message](https://github.com/jup-ag/rfq-webhook-toolkit/blob/de46a38c3cfbda730c026a9b4bea85591c83f9e5/order-engine-sdk/src/fill.rs#L151) function.
