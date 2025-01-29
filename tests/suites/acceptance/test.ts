@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { assert } from 'chai';
 import axios from 'axios';
+import { a } from 'vitest/dist/chunks/suite.B2jumIFP.js';
 const BN = require('bn.js');
 const solanaWeb3 = require('@solana/web3.js');
 
@@ -30,6 +32,7 @@ describe('Webhook API Quote', () => {
     const payload = {
       amount: "250000000",
       amountIn: "250000000",
+      feeBps: 0,
       protocol: "v1",
       quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
       quoteType: "exactIn",
@@ -40,19 +43,64 @@ describe('Webhook API Quote', () => {
       tokenOut: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
     }
 
-    const response = await axios.post(url, payload);
+    const response = await axios.post(url, payload).then((response) => {
+      console.log("response --> ", response.data);
 
-    console.log("response --> ", response.data);
-
-    expect(response.status).toBe(200);
-    expect(response.data.quoteId).toBe(payload.quoteId);
-    expect(response.data.requestId).toBe(payload.requestId);
-    expect(response.data).toHaveProperty('maker');
-    expect(response.data).toHaveProperty('amountOut');
-    expect(new BN(response.data.amountOut).gt(new BN(0))).toBe(true);
+      expect(response.status).toBe(200);
+      expect(response.data.quoteId).toBe(payload.quoteId);
+      expect(response.data.requestId).toBe(payload.requestId);
+      expect(response.data).toHaveProperty('maker');
+      expect(response.data).toHaveProperty('amountOut');
+      expect(new BN(response.data.amountOut).gt(new BN(0))).toBe(true);
+    }).catch((error) => {
+      if(error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        assert.fail(`failed to get quote: unexpected response status ${error.response.status}: ${error.response.data}`);
+      } else if(error.request) {
+        console.log("error.request --> ", error.request.data);
+        assert.fail('failed to get quote: no response from server');
+      } else {
+        console.log("error --> ", error);
+        assert.fail('failed to get quote: unknown error');
+      }
+    });
   });
 
+  it('should return a 404 for pair not supported', async () => {
+    const url = `${WEBHOOK_URL}/quote`;
+    console.log('request url: ', url);
 
+    const payload = {
+      amount: "250000000",
+      amountIn: "250000000",
+      feeBps: 0,
+      protocol: "v1",
+      quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
+      quoteType: "exactIn",
+      requestId: "629bddf3-0038-43a6-8956-f5433d6b1191",
+      suggestedPrioritizationFees: 10000,
+      taker: "5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc",
+      tokenIn: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      // this token does not exists so it cannot be supported and the response should be 404
+      tokenOut: "fake3KUxqvJ5erXobKTYFtL2BpTgGzy7B9AcRcXeCwWvFM",
+    }
+
+    const response = await axios.post(url, payload).then((response) => {
+      console.log("response --> ", response.data);
+      assert.fail('expected 404 response');
+    }).catch((error) => {
+      if(error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        expect(error.response.status).toBe(404);
+      } else if(error.request) {
+        console.log("error.request --> ", error.request.data);
+        assert.fail('failed to get quote: no response from server');
+      } else {
+        console.log("error --> ", error);
+        assert.fail('failed to get quote: unknown error');
+      }
+    });
+  });
 
   it('should return a successful swap response', async () => {
     const url = `${WEBHOOK_URL}/swap`;

@@ -8,7 +8,7 @@ import * as params from '../../params';
 
 
 // Start mock server before tests and close it after
-describe('Webhook EDGE API Quote', () => {
+describe('Webhook e2e API Quote', () => {
   it('should return a successful quote response', async () => {
 
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
@@ -28,24 +28,38 @@ describe('Webhook EDGE API Quote', () => {
       inputMint: params.INPUT_MINT,
       outputMint: params.OUTPUT_MINT,
       amount: `${params.AMOUNT}`,
+      feeBps: params.FEE_BPS,
       swapType: 'rfq',
       webhookId: params.WEBHOOK_ID,
     }
 
-    const response = await axios.get(url, { params: payload });
+    const response = await axios.get(url, { params: payload })
+    .then((response) => {
+      console.log("response --> ", response.data);
+      expect(response.status).toBe(200);
+      expect(response.data).toHaveProperty('quoteId');
+      expect(response.data).toHaveProperty('requestId');
+      expect(response.data).toHaveProperty('expireAt');
+      expect(response.data).toHaveProperty('orderInfo');
+      expect(response.data).toHaveProperty('maker'); // the maker should be the MM address
+      expect(response.data).toHaveProperty('orderInfo');
+      expect(response.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
+      expect(response.data.orderInfo.input.token).toBe(params.INPUT_MINT);
+      expect(new BN(response.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
+      expect(response.data.orderInfo.output.token).toBe(params.OUTPUT_MINT);
+    })
+    .catch((error) => {
+      if(error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        assert.fail(`failed to get quote: unexpected response status ${error.response.status}: ${error.response.data.error}`);
+      } else if(error.request) {
+        assert.fail(`failed to get quote: no response from server ${error.config.url}`);
+      } else {
+        console.log("error --> ", error);
+        assert.fail(`failed to get quote: unknown error for ${error.config.url}`);
+      }
+    });
 
-    console.log("response --> ", response.data);
 
-    expect(response.status).toBe(200);
-    expect(response.data).toHaveProperty('quoteId');
-    expect(response.data).toHaveProperty('requestId');
-    expect(response.data).toHaveProperty('expireAt');
-    expect(response.data).toHaveProperty('orderInfo');
-    expect(response.data).toHaveProperty('maker'); // the maker should be the MM address
-    expect(response.data).toHaveProperty('orderInfo');
-    expect(response.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
-    expect(response.data.orderInfo.input.token).toBe(params.INPUT_MINT);
-    expect(new BN(response.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
-    expect(response.data.orderInfo.output.token).toBe(params.OUTPUT_MINT);
   });
 });
