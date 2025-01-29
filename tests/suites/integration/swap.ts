@@ -9,7 +9,7 @@ import * as params from '../../params';
 
 // Start mock server before tests and close it after
 describe('Webhook e2e API Swap', {
-  timeout: 10_000,
+  timeout: 3_000_000,
 },() => {
   it('should execute a successful swap', async () => {
 
@@ -78,6 +78,18 @@ describe('Webhook e2e API Swap', {
       expect(swapResponse.status).toBe(200);
       expect(swapResponse.data.quoteId).toBe(swapPayload.quoteId);
       expect(swapResponse.data.state).toBe("accepted");
+
+
+      await new Promise(r => setTimeout(r, 20_000));
+
+      const swapResponseWitSig = await axios.post(swapURL, swapPayload, { params: swapParams });
+      console.log("Swap response --> ", swapResponseWitSig.data);
+
+
+      // Assertions for the swap response
+      expect(swapResponseWitSig.status).toBe(200);
+      expect(swapResponseWitSig.data.quoteId).toBe(swapPayload.quoteId);
+      expect(swapResponseWitSig.data.state).toBe("confirmed");
 
     } catch (error) {
       if (error.response) {

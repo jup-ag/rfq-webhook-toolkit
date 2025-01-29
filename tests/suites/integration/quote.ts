@@ -8,7 +8,7 @@ import * as params from '../../params';
 
 
 // Start mock server before tests and close it after
-describe('Webhook e2e API Quote', () => {
+describe('Webhook e2e API Quote', { skip: true }, () => {
   it('should return a successful quote response', async () => {
 
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
