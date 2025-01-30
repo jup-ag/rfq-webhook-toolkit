@@ -100,26 +100,19 @@ make run-server-example
 
 and open the following URL in your browser: [http://localhost:8080/swagger-ui/](http://localhost:8080/swagger-ui/)
 
-### Webhook Error Responses
+### Webhook HTTP reponse codes
 
 Market Makers should return appropriate HTTP status codes along with error messages. The following status codes are supported:
 
-### Severe errors
+##### Successful responses
+- `2oo OK`: The request was successful, and the webhook will return a quote.
+- `404 Not Found`: The webhook will not return a quote for this request (e.g. the pair or the size are not supported)
 
-- `400 Bad Request`: When the request parameters sent by Jupiter are invalid or malformed
-- `401 Unauthorized`: When authentication fails, e.g x-api-key is not provided or invalid
+##### Error responses
 
-### Warnings
-
-- `404 Not Found`: When the requested resource doesn't exist, as in case of a token not being supported
-
-### Service errors
-
-This is when the market maker is unable to fulfill the request due to internal issues. Jupiter may stop sending requests to the market maker if this happens too frequently.
-
-- `500 Internal Server Error`: When an unexpected error occurs on the market maker's side
-- `503 Service Unavailable`: When the market maker service is temporarily unavailable
-
+- `400 Bad Request`: The request sent to the webhook is malformed (e.g. missing an expected parameter) 
+- `401 Unauthorized`:  Authorization failed. For example the `X-API-KEY` is missing or incorrect
+- `50x Server Errors`: The webhook is offline or unable to respond. If the status perstist, the webhook will be temporarily sospended and will not receive requests.
 
 ## Expiry information
 
