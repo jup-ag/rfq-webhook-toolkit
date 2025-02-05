@@ -8,6 +8,7 @@
 ///
 use anyhow::Result;
 use once_cell::sync::Lazy;
+use solana_sdk::{signature::Keypair, signer::Signer};
 use thiserror::Error;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -116,7 +117,7 @@ responses(
     (status = 503, body= ErrorResponse),
 ))]
 async fn example_quote(
-    State(config): State<Arc<Config>>,
+    State(state): State<Arc<AppState>>,
     Query(_queries): Query<HashMap<String, String>>,
     WithRejection(Json(quote_request), _): WithRejection<Json<QuoteRequest>, ApiError>,
 ) -> Result<Json<QuoteResponse>, ApiError> {
@@ -134,6 +135,8 @@ async fn example_quote(
     // Step 2: Compute the quote
     // Step 3: Build the quote response
 
+    let maker_pubkey = state.keypair.pubkey().to_string();
+
     let quote_res = QuoteResponse {
         request_id: quote_request.request_id,
         quote_id: quote_request.quote_id,
@@ -144,7 +147,7 @@ async fn example_quote(
         quote_type: quote_request.quote_type,
         protocol: quote_request.protocol,
         amount_out: "100000000".to_string(), // hardcoded amount out
-        maker: config.maker_address.to_string(),
+        maker: maker_pubkey,
         prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
     };
 
@@ -168,6 +171,7 @@ responses(
     (status = 503, body= ErrorResponse),
 ))]
 async fn example_swap(
+    State(state): State<Arc<AppState>>,
     Query(_queries): Query<HashMap<String, String>>,
     WithRejection(Json(quote_request), _): WithRejection<Json<SwapRequest>, ApiError>,
 ) -> Result<Json<SwapResponse>, ApiError> {
@@ -177,24 +181,29 @@ async fn example_swap(
     // Step 4: Build the swap response with the tx signature
 
     // For testing purposes on this implementation  we leverage ad-hoc request_id to trigger errors
-
     const SIMULATE_REJECTION: &str = "00000000-0000-0000-0000-000000000001";
     const SIMULATE_MALFORMED: &str = "00000000-0000-0000-0000-000000000002";
 
     match quote_request.request_id.as_str() {
-        SIMULATE_REJECTION =>
-            Ok(Json(SwapResponse {
-                tx_signature: None,
-                quote_id: quote_request.quote_id.clone(),
-                state: SwapState::Rejected,
-                rejection_reason: Some("<rejection reason>".to_string()),
-            }))
-        ,
-        SIMULATE_MALFORMED =>
-            Err(ApiError::BadRequest("Malformed request".to_string())),
+        SIMULATE_REJECTION => Ok(Json(SwapResponse {
+            tx_signature: None,
+            quote_id: quote_request.quote_id.clone(),
+            state: SwapState::Rejected,
+            rejection_reason: Some("<rejection reason>".to_string()),
+        })),
+        SIMULATE_MALFORMED => Err(ApiError::BadRequest("Malformed request".to_string())),
         _ => {
+            // sign the message
+            let signature = state
+                .keypair
+                .sign_message(quote_request.transaction.as_bytes());
+
+            // broadcast the transaction
+
+            // return the response
             Ok(Json(SwapResponse {
-                tx_signature: Some("3HMNN9enUZnjj2eV3vBB8j3RWtmq1iSpXniRd4Ly41vjx7PoAUjAcRz1Cz2FX8YZBkPnj2Lzew2YFPcSkkbp85Xj".to_string()),
+                // e.g. "3HMNN9enUZnjj2eV3vBB8j3RWtmq1iSpXniRd4Ly41vjx7PoAUjAcRz1Cz2FX8YZBkPnj2Lzew2YFPcSkkbp85Xj"
+                tx_signature: Some(signature.to_string()),
                 quote_id: quote_request.quote_id.clone(),
                 state: SwapState::Accepted,
                 rejection_reason: None,
@@ -229,7 +238,12 @@ async fn not_found_handler() -> ApiError {
 
 const MAX_AGE: Duration = Duration::from_secs(86400);
 
-pub fn app(config: Arc<Config>) -> Router {
+struct AppState {
+    _config: Config,
+    keypair: Keypair,
+}
+
+fn app(state: Arc<AppState>) -> Router {
     let router = Router::new()
         .route("/quote", post(example_quote))
         .route("/swap", post(example_swap))
@@ -238,7 +252,7 @@ pub fn app(config: Arc<Config>) -> Router {
         .route("/health", get(get_health))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()))
         .fallback(not_found_handler)
-        .with_state(config);
+        .with_state(state);
 
     router
         .layer(CorsLayer::permissive().max_age(MAX_AGE))
@@ -250,9 +264,32 @@ pub fn app(config: Arc<Config>) -> Router {
         )
 }
 
-pub async fn serve(config: Arc<Config>) {
+pub async fn serve(config: Config) {
+    // generate a keypair if not provided
+    let keypair = match &config.maker_keypair {
+        Some(private_key_file) => {
+            tracing::info!("loading keypair from file: {}", private_key_file);
+            Keypair::from_base58_string(
+                &std::fs::read_to_string(private_key_file)
+                    .expect("Failed to parse keypair from file"),
+            )
+        }
+        None => {
+            tracing::info!("Loaded keypair from file");
+            Keypair::new()
+        }
+    };
+
+    tracing::info!("maker pubkey: {}", keypair.pubkey());
+
+    // create the shared state
+    let app_state = Arc::new(AppState {
+        _config: config.clone(),
+        keypair: keypair,
+    });
+
     // build the axum router
-    let app = app(config.clone());
+    let app = app(app_state);
     // start the server
     let listener = tokio::net::TcpListener::bind(config.listen_addr.clone())
         .await
