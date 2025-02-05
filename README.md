@@ -100,26 +100,19 @@ make run-server-example
 
 and open the following URL in your browser: [http://localhost:8080/swagger-ui/](http://localhost:8080/swagger-ui/)
 
-### Webhook Error Responses
+### Webhook HTTP reponse codes
 
 Market Makers should return appropriate HTTP status codes along with error messages. The following status codes are supported:
 
-### Severe errors
+##### Successful responses
+- `2oo OK`: The request was successful, and the webhook will return a quote.
+- `404 Not Found`: The webhook will not return a quote for this request (e.g. the pair or the size are not supported)
 
-- `400 Bad Request`: When the request parameters sent by Jupiter are invalid or malformed
-- `401 Unauthorized`: When authentication fails, e.g x-api-key is not provided or invalid
+##### Error responses
 
-### Warnings
-
-- `404 Not Found`: When the requested resource doesn't exist, as in case of a token not being supported
-
-### Service errors
-
-This is when the market maker is unable to fulfill the request due to internal issues. Jupiter may stop sending requests to the market maker if this happens too frequently.
-
-- `500 Internal Server Error`: When an unexpected error occurs on the market maker's side
-- `503 Service Unavailable`: When the market maker service is temporarily unavailable
-
+- `400 Bad Request`: The request sent to the webhook is malformed (e.g. missing an expected parameter) 
+- `401 Unauthorized`:  Authorization failed. For example the `X-API-KEY` is missing or incorrect
+- `50x Server Errors`: The webhook is offline or unable to respond. If the status perstist, the webhook will be temporarily sospended and will not receive requests.
 
 ## Expiry information
 
@@ -143,7 +136,7 @@ Note: These expiry thresholds may be adjusted based on performance and feedback.
 
 ## Advertising supported tokens
 
-In order to receive relevant quote requests, market makers need to advertise the tokens they support. This is done by providing a list of supported tokens in the response to the `/tokens` route. The response should be a JSON array of token addresses. The list of tokens is refreshed every 10 minutes. 
+In order to receive relevant quote requests, market makers need to advertise the tokens they support. This is done by providing a list of supported tokens in the response to the `/tokens` route. The response should be a JSON array of token addresses. The list of tokens is refreshed every 10 minutes.
 
 
 ## Technical integration
@@ -156,7 +149,7 @@ In addition, we provide a set of test suites to verify the implementation of the
 
 Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without being subject to the volatility of on-chain gas prices or chain health. RFQ fills are also much less CU intensive (<10x) compared to AMM swaps, and can save gas in the long run on fills. Today, RFQ charges a dynamic fee that is selected based on factors like tokens and size. The dynamic fee amount is forwarded to webhooks in the quote request parameters and it is appended to the message data (2 additional bytes, u16). Note that thae fee is not part of the message itself, it is only appended as additional bytes.
 
-ℹ️ Webhooks do not need to account for fees when quoting; the fee is applied directly by the RFQ system during transaction building. For example, for a quote of 1 SOL to 1000 USDC with a fee of 100 bps, only 990 USDC will be transferred out of the market maker account, while 10 USDC will be collected as a fee.
+ℹ️ Webhooks do not need to account for fees when quoting; the fee is applied directly by the RFQ system during transaction building. For example, for a quote of 1 SOL to 1000 USDC with a fee of 100 bps, only 990 USDC will be transferred out of the market maker account, while 10 USDC will be collected as a fee. Note that the fee is not automatically transferred and will be accounted for asyncronously on a regular basis.
 
 ## Future considerations/plans
 
@@ -174,3 +167,16 @@ Current implementation enforces that Jupiter RFQ API will be the one crafting th
 Some market makers may not wish to be the ones handling the sending of transactions on chain. We may look into helping market makers land their transactions on chain in the future.
 
 
+## FAQ
+
+##### Does RFQ support native SOL?
+
+Yes, native SOL is fully supported in the order-engine program for both the taker (user) and the maker. However, for now, we assume the maker will use WSOL (Wrapped SOL).
+
+##### Do faster quotes receive priority?
+
+No, the RFQ system dispatches the quote request to all registered webhooks simultaneously with a 500ms timeout. During this time, all received quotes are compared to select the best one. The selection prioritizes the quote value first. If two quotes have identical values, the quote from the webhook with the faster response time will be chosen.
+
+##### Shall a webhook verify swap requests?
+
+Yes, the RFQ system will verify the swap requests before forwarding them to the webhooks. However, webhooks are encouraged to verify the swap requests as well to ensure the integrity of the system. The checks that the RFQ system performs can be found in the [validate_similar_fill_sanitized_message](https://github.com/jup-ag/rfq-webhook-toolkit/blob/de46a38c3cfbda730c026a9b4bea85591c83f9e5/order-engine-sdk/src/fill.rs#L151) function.
