@@ -29,6 +29,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 uuid = { workspace = true, features = ["v4"] }
 webhook-api = { path = "../webhook-api" }
+order-engine-sdk = { path = "../order-engine-sdk" }
 utoipa = { workspace = true, features = ["axum_extras", "debug"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 utoipa-axum = { workspace = true, features = ["debug"] }
@@ -36,3 +37,4 @@ solana-sdk = { workspace = true }
 dotenvy = { workspace = true }
 utoipauto = { workspace = true }
 once_cell = { workspace = true }
+solana-rpc-client = { workspace = true }

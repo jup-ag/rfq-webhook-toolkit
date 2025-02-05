@@ -8,6 +8,10 @@
 ///
 use anyhow::Result;
 use once_cell::sync::Lazy;
+use order_engine_sdk::transaction::{
+    deserialize_transaction_base64_into_transaction_details, TransactionDetails,
+};
+use solana_rpc_client::rpc_client::SerializableTransaction;
 use solana_sdk::{signature::Keypair, signer::Signer};
 use thiserror::Error;
 use utoipa::OpenApi;
@@ -193,16 +197,59 @@ async fn example_swap(
         })),
         SIMULATE_MALFORMED => Err(ApiError::BadRequest("Malformed request".to_string())),
         _ => {
-            // sign the message
-            let signature = state
-                .keypair
-                .sign_message(quote_request.transaction.as_bytes());
+            // ========================================
+            // extract the message
+            // ========================================
+            let TransactionDetails {
+                mut versioned_transaction,
+                sanitized_message: _,
+            } = deserialize_transaction_base64_into_transaction_details(
+                &quote_request.transaction,
+            )?;
 
+            // ========================================
+            // validate the message
+            // ========================================
+            // add the validation logic here
+
+            // ========================================
+            // add the maker signature to the transaction
+            // ========================================
+            match versioned_transaction.signatures.get_mut(0) {
+                Some(signature_slot) => {
+                    let signature = state
+                        .keypair
+                        .sign_message(&versioned_transaction.message.serialize());
+                    *signature_slot = signature;
+                }
+                None => {
+                    return Err(ApiError::BadRequest(
+                        "Partial sign signature to replace not found".to_string(),
+                    ));
+                }
+            }
+            let signature = versioned_transaction.get_signature().to_string();
+
+            // ========================================
             // broadcast the transaction
+            // ========================================
+
+            let _rpc_client_url = state.config.rpc_url.clone();
+            /*
+            tokio::spawn(async move {
+                let client = nonblocking::rpc_client::RpcClient::new(rpc_client_url);
+                // We're using send_and_confirm_transaction to keep sending until the outcome is known on-chain, or the blockhash expires
+                if let Err(error) = client
+                    .send_and_confirm_transaction(&versioned_transaction)
+                    .await
+                {
+                    tracing::error!("Failed to send and confirm transaction: {error:?}");
+                };
+            });
+             */
 
             // return the response
             Ok(Json(SwapResponse {
-                // e.g. "3HMNN9enUZnjj2eV3vBB8j3RWtmq1iSpXniRd4Ly41vjx7PoAUjAcRz1Cz2FX8YZBkPnj2Lzew2YFPcSkkbp85Xj"
                 tx_signature: Some(signature.to_string()),
                 quote_id: quote_request.quote_id.clone(),
                 state: SwapState::Accepted,
@@ -239,7 +286,7 @@ async fn not_found_handler() -> ApiError {
 const MAX_AGE: Duration = Duration::from_secs(86400);
 
 struct AppState {
-    _config: Config,
+    config: Config,
     keypair: Keypair,
 }
 
@@ -284,7 +331,7 @@ pub async fn serve(config: Config) {
 
     // create the shared state
     let app_state = Arc::new(AppState {
-        _config: config.clone(),
+        config: config.clone(),
         keypair: keypair,
     });
 
