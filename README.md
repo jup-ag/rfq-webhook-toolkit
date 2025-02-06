@@ -175,7 +175,7 @@ Yes, native SOL is fully supported in the order-engine program for both the take
 
 ##### Do faster quotes receive priority?
 
-No, the RFQ system dispatches the quote request to all registered webhooks simultaneously with a 500ms timeout. During this time, all received quotes are compared to select the best one. The selection prioritizes the quote value first. If two quotes have identical values, the quote from the webhook with the faster response time will be chosen.
+No, the RFQ system dispatches the quote request to all registered webhooks simultaneously with a **250ms** timeout. During this time, all received quotes are compared to select the best one. The selection prioritizes the quote value first. If two quotes have identical values, the quote from the webhook with the faster response time will be chosen.
 
 ##### Shall a webhook verify swap requests?
 
