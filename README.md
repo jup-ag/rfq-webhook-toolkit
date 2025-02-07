@@ -105,6 +105,7 @@ and open the following URL in your browser: [http://localhost:8080/swagger-ui/](
 Market Makers should return appropriate HTTP status codes along with error messages. The following status codes are supported:
 
 ##### Successful responses
+
 - `2oo OK`: The request was successful, and the webhook will return a quote.
 - `404 Not Found`: The webhook will not return a quote for this request (e.g. the pair or the size are not supported)
 
@@ -175,8 +176,16 @@ Yes, native SOL is fully supported in the order-engine program for both the take
 
 ##### Do faster quotes receive priority?
 
-No, the RFQ system dispatches the quote request to all registered webhooks simultaneously with a **250ms** timeout. During this time, all received quotes are compared to select the best one. The selection prioritizes the quote value first. If two quotes have identical values, the quote from the webhook with the faster response time will be chosen.
+No, the RFQ system dispatches the quote request to all registered webhooks simultaneously with a **250ms** timeout. During this time, all received quotes are compared to select the best one. The selection prioritizes the quote value first (In the unlikely scenario where two quotes have identical values, the quote from the webhook with the faster response time will be actually prioritized).
 
 ##### Shall a webhook verify swap requests?
 
 Yes, the RFQ system will verify the swap requests before forwarding them to the webhooks. However, webhooks are encouraged to verify the swap requests as well to ensure the integrity of the system. The checks that the RFQ system performs can be found in the [validate_similar_fill_sanitized_message](https://github.com/jup-ag/rfq-webhook-toolkit/blob/de46a38c3cfbda730c026a9b4bea85591c83f9e5/order-engine-sdk/src/fill.rs#L151) function.
+
+##### Is there a penalty for not providing a quote (status code 404)?
+
+No, there is no penalty. It is up to the webhook to decide whether to respond with a quote (`200 OK`) or indicate that it cannot provide one (`404 Not Found`).
+
+For example, suppose a webhook provides quotes for USDC/SOL only within a range of 100 to 1000 USDC. If it receives a quote request for 10 USDC → SOL, it will respond with `404 Not Found`, since the amount is outside its quoting range.
+
+In another case, a webhook may only support one-way quotes (USDC → SOL) but not SOL → USDC. If it receives a request for SOL → USDC, it will also return `404 Not Found`.
