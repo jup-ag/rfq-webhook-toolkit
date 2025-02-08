@@ -20,7 +20,7 @@ run-acceptance-tests-against-sample-server:
 	  trap 'kill $$server_pid' EXIT INT TERM; \
 	  WEBHOOK_URL=$${WEBHOOK_URL:-http://localhost:8080}; \
 	  echo "Using WEBHOOK_URL=$$WEBHOOK_URL"; \
-	  timeout=120; \
+	  timeout=60; \
 	  elapsed=0; \
 	  while ! curl -s -o /dev/null -w "%{http_code}" $$WEBHOOK_URL/health | grep -q "200"; do \
 	    if [ $$elapsed -ge $$timeout ]; then \
@@ -50,7 +50,7 @@ update-openapi-spec:
 	  trap 'kill $$server_pid' EXIT INT TERM; \
 	  WEBHOOK_URL=$${WEBHOOK_URL:-http://localhost:8080}; \
 	  echo "Using WEBHOOK_URL=$$WEBHOOK_URL"; \
-	  timeout=120; \
+	  timeout=60; \
 	  elapsed=0; \
 	  while ! curl -s -o /dev/null -w "%{http_code}" $$WEBHOOK_URL/health | grep -q "200"; do \
 	    if [ $$elapsed -ge $$timeout ]; then \
