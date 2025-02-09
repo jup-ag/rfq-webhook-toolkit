@@ -1,6 +1,6 @@
 # RFQ Webhook Toolkit
 
-:mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. If you are interested in being a MM on Jupiter RFQ, please read the below toolkit and reach out to [Soju](https://t.me/sojuuuu54) / [Ben](https://t.me/benliewxyz) on Telegram to register your webhook.
+:mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. If you are interested in being a MM on Jupiter RFQ, please read the below toolkit and reach out to [Soju](https://t.me/sojuuuu54) or [Ben](https://t.me/benliewxyz) on Telegram to register your webhook.
 
 
 ## Order Engine
@@ -100,7 +100,7 @@ make run-server-example
 
 and open the following URL in your browser: [http://localhost:8080/swagger-ui/](http://localhost:8080/swagger-ui/)
 
-### Webhook HTTP reponse codes
+### Webhook HTTP response codes
 
 Market Makers should return appropriate HTTP status codes along with error messages. The following status codes are supported:
 
@@ -111,9 +111,9 @@ Market Makers should return appropriate HTTP status codes along with error messa
 
 ##### Error responses
 
-- `400 Bad Request`: The request sent to the webhook is malformed (e.g. missing an expected parameter) 
+- `400 Bad Request`: The request sent to the webhook is malformed (e.g. missing an expected parameter)
 - `401 Unauthorized`:  Authorization failed. For example the `X-API-KEY` is missing or incorrect
-- `50x Server Errors`: The webhook is offline or unable to respond. If the status perstist, the webhook will be temporarily sospended and will not receive requests.
+- `50x Server Errors`: The webhook is offline or unable to respond. If the status persist, the webhook will be temporarily suspended and will not receive requests.
 
 ## Expiry information
 
@@ -121,8 +121,8 @@ We enforce a fixed expiry timing flow for all quotes and transactions:
 
 1. When creating a quote, we set transaction expiry to **55 seconds** from creation time
 2. On the frontend:
-   - If remaining time before expiry is less than **40 seconds** when user needs to sign, we will automatically requote
-   - The frontend will also do a requote every **15s**
+   - If remaining time before expiry is less than **40 seconds** when user needs to sign, we will automatically re-quote
+   - The frontend will also do a re-quote every **15s**
 3. On the backend:
    - If remaining time before expiry is less than **25 seconds** when our /swap endpoint receives the request, we will reject the swap before forwarding to market makers
 
@@ -146,14 +146,19 @@ To facilitate the integration, in this repository you will find a sample server 
 
 In addition, we provide a set of test suites to verify the implementation of the webhook. The tests, and their instructions, can be found in the [`tests`](./tests/) directory.
 
+### Non-standard payload
+
+The transaction data includes, beside the instruction data for the order-engine, 3 additional bytes that are appended to the instruction data. These bytes are not processed by the program and are only information and to be consumed by an off-chain consumer. The first 2 bytes contains the fee amount in basis points (u16) and the third byte (u8) is a bit mask where the least significant bit indicates if the swap is exact-in (0) or exact-out (1).
+
 ## Fees
 
-Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without being subject to the volatility of on-chain gas prices or chain health. RFQ fills are also much less CU intensive (<10x) compared to AMM swaps, and can save gas in the long run on fills. Today, RFQ charges a dynamic fee that is selected based on factors like tokens and size. The dynamic fee amount is forwarded to webhooks in the quote request parameters and it is appended to the message data (2 additional bytes, u16). Note that thae fee is not part of the message itself, it is only appended as additional bytes.
+Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without being subject to the volatility of on-chain gas prices or chain health. RFQ fills are also much less CU intensive (<10x) compared to AMM swaps, and can save gas in the long run on fills. Today, RFQ charges a dynamic fee that is selected based on factors like tokens and size. The dynamic fee amount is forwarded to webhooks in the quote request parameters and it is contained in the message that both taker and maker sign (see [the payload section](#non-standard-payload) above)
 
-ℹ️ Webhooks do not need to account for fees when quoting; the fee is applied directly by the RFQ system during transaction building. For example, for a quote of 1 SOL to 1000 USDC with a fee of 100 bps, only 990 USDC will be transferred out of the market maker account, while 10 USDC will be collected as a fee. Note that the fee is not automatically transferred and will be accounted for asyncronously on a regular basis.
+ℹ️ Webhooks do not need to account for fees when quoting; the fee is applied directly by the RFQ system during transaction building. For example, for a quote of 1 SOL to 1000 USDC with a fee of 100 bps, only 990 USDC will be transferred out of the market maker account, while 10 USDC will be collected as a fee. Note that the fee is not automatically transferred and will be accounted for asynchronously on a regular basis.
+
+
 
 ## Future considerations/plans
-
 
 #### Fulfillment Requirements
 
