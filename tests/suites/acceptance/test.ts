@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { assert } from 'chai';
 import axios from 'axios';
-import { a } from 'vitest/dist/chunks/suite.B2jumIFP.js';
+import { assert } from 'chai';
+import { describe, expect, it } from 'vitest';
+import * as params from '../../params';
 const BN = require('bn.js');
 const solanaWeb3 = require('@solana/web3.js');
 
@@ -24,23 +24,24 @@ function isValidSolanaAddress(address) {
 
 // Start mock server before tests and close it after
 describe('Webhook API Quote', () => {
-  it('should return a successful quote response', async () => {
+  it('should return a successful quote response (ExactIn)', async () => {
 
     const url = `${WEBHOOK_URL}/quote`;
     console.log('request url: ', url);
 
+    console.log("how many ${params.MINT_A} will you get for ${params.AMOUNT} of ${params.MINT_B}?");
+
     const payload = {
-      amount: "250000000",
-      amountIn: "250000000",
-      feeBps: 0,
+      amount: `${params.AMOUNT}`,
+      feeBps: params.FEE_BPS,
       protocol: "v1",
       quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
       quoteType: "exactIn",
       requestId: "629bddf3-0038-43a6-8956-f5433d6b1191",
       suggestedPrioritizationFees: 10000,
       taker: "5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc",
-      tokenIn: "So11111111111111111111111111111111111111112",
-      tokenOut: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+      tokenIn: params.MINT_B,
+      tokenOut: params.MINT_A
     }
 
     const response = await axios.post(url, payload).then((response) => {
@@ -49,9 +50,61 @@ describe('Webhook API Quote', () => {
       expect(response.status).toBe(200);
       expect(response.data.quoteId).toBe(payload.quoteId);
       expect(response.data.requestId).toBe(payload.requestId);
+      expect(response.data.tokenIn).toBe(payload.tokenIn);
+      expect(response.data.tokenOut).toBe(payload.tokenOut);
+      expect(response.data.quoteType).toBe(payload.quoteType);
       expect(response.data).toHaveProperty('maker');
       expect(response.data).toHaveProperty('amountOut');
+      expect(response.data.taker).toBe(payload.taker);
+      expect(response.data.amountIn).toBe(payload.amount);
       expect(new BN(response.data.amountOut).gt(new BN(0))).toBe(true);
+    }).catch((error) => {
+      if(error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        assert.fail(`failed to get quote: unexpected response status ${error.response.status}: ${error.response.data}`);
+      } else if(error.request) {
+        console.log("error.request --> ", error.request.data);
+        assert.fail('failed to get quote: no response from server');
+      } else {
+        console.log("error --> ", error);
+        assert.fail('failed to get quote: unknown error');
+      }
+    });
+  });
+
+  it('should return a successful quote response (ExactOut)', async () => {
+
+    const url = `${WEBHOOK_URL}/quote`;
+    console.log('request url: ', url);
+
+    console.log("how many ${params.MINT_A} do you need to get ${params.AMOUNT} of ${params.MINT_B}?");
+
+    const payload = {
+      amount: `${params.AMOUNT}`,
+      feeBps: 0,
+      protocol: "v1",
+      quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
+      quoteType: "exactOut",
+      requestId: "629bddf3-0038-43a6-8956-f5433d6b1191",
+      suggestedPrioritizationFees: 10000,
+      taker: "5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc",
+      tokenIn: params.MINT_A,
+      tokenOut: params.MINT_B
+    }
+
+    const response = await axios.post(url, payload).then((response) => {
+      console.log("response --> ", response.data);
+
+      expect(response.status).toBe(200);
+      expect(response.data.quoteId).toBe(payload.quoteId);
+      expect(response.data.requestId).toBe(payload.requestId);
+      expect(response.data.tokenIn).toBe(payload.tokenIn);
+      expect(response.data.tokenOut).toBe(payload.tokenOut);
+      expect(response.data.quoteType).toBe(payload.quoteType);
+      expect(response.data).toHaveProperty('maker');
+      expect(response.data.taker).toBe(payload.taker);
+      expect(response.data.amountOut).toBe(payload.amount);
+      expect(new BN(response.data.amountIn).gt(new BN(0))).toBe(true);
     }).catch((error) => {
       if(error.response) {
         console.log("error.response.data --> ", error.response.data);
@@ -71,8 +124,7 @@ describe('Webhook API Quote', () => {
     console.log('request url: ', url);
 
     const payload = {
-      amount: "250000000",
-      amountIn: "250000000",
+      amount: `${params.AMOUNT}`,
       feeBps: 0,
       protocol: "v1",
       quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
@@ -80,7 +132,7 @@ describe('Webhook API Quote', () => {
       requestId: "629bddf3-0038-43a6-8956-f5433d6b1191",
       suggestedPrioritizationFees: 10000,
       taker: "5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc",
-      tokenIn: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      tokenIn: params.MINT_A,
       // this token does not exists so it cannot be supported and the response should be 404
       tokenOut: "fake3KUxqvJ5erXobKTYFtL2BpTgGzy7B9AcRcXeCwWvFM",
     }
