@@ -22,7 +22,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration, vec};
 
 use axum::{
     extract::{rejection::JsonRejection, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -127,9 +127,14 @@ responses(
 async fn example_quote(
     State(state): State<Arc<AppState>>,
     Query(_queries): Query<HashMap<String, String>>,
+    headers: HeaderMap,
     WithRejection(Json(quote_request), _): WithRejection<Json<QuoteRequest>, ApiError>,
 ) -> Result<Json<QuoteResponse>, ApiError> {
-    tracing::info!("Received quote request: {:?}", quote_request);
+    tracing::info!(
+        "Received quote request: {:?}, headers: {:?}",
+        quote_request,
+        headers
+    );
 
     // if the  the token pair is not supported, return 404
     if !SUPPORTED_TOKENS.contains(&quote_request.token_in)
@@ -145,6 +150,8 @@ async fn example_quote(
 
     let maker_pubkey = state.keypair.pubkey().to_string();
 
+    let example_quoted_amount = "123123123".to_string();
+
     // different logic between ExactIn and ExactOut
 
     let quote = match quote_request.quote_type {
@@ -159,7 +166,7 @@ async fn example_quote(
                 token_out: quote_request.token_out,
                 quote_type: quote_request.quote_type,
                 protocol: quote_request.protocol,
-                amount_out: "100000000".to_string(), // hardcoded amount out
+                amount_out: example_quoted_amount,
                 maker: maker_pubkey,
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
             }
@@ -171,7 +178,7 @@ async fn example_quote(
                 quote_id: quote_request.quote_id,
                 taker: quote_request.taker,
                 token_in: quote_request.token_in,
-                amount_in: "100000000".to_string(), // hardcoded amount in
+                amount_in: example_quoted_amount,
                 token_out: quote_request.token_out,
                 quote_type: quote_request.quote_type,
                 protocol: quote_request.protocol,
