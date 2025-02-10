@@ -9,7 +9,7 @@ const solanaWeb3 = require('@solana/web3.js');
 
 // Base API URL, load from environment variable or use default
 const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:8080';
-const API_KEY = process.env.API_KEY || false; // api key
+const API_KEY = process.env.WEBHOOK_API_KEY || false; // api key
 const HEADERS = API_KEY ? { 'X-API-KEY': API_KEY } : {};
 
 // Helper function to validate Solana addresses

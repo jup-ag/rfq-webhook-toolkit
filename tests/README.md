@@ -34,6 +34,12 @@ To run the tests, you need to provide the webhook URL:
 WEBHOOK_URL=<your_webhook_url> make run-acceptance-tests
 ```
 
+you can also provide an api key if your webhook requires it:
+
+```bash
+WEBHOOK_URL=<your_webhook_url> WEBHOOK_API_KEY=<your_webhook_api_key> make run-acceptance-tests
+```
+
 for an example, you can run the tests against the bundled [sample server](../server-example/):
 
 ```bash
