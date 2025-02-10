@@ -152,7 +152,7 @@ The transaction data includes, beside the instruction data for the order-engine,
 
 ## Fees
 
-Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without being subject to the volatility of on-chain gas prices or chain health. RFQ fills are also much less CU intensive (<10x) compared to AMM swaps, and can save gas in the long run on fills. Today, RFQ charges a dynamic fee that is selected based on factors like tokens and size. The dynamic fee amount is forwarded to webhooks in the quote request parameters and it is contained in the message that both taker and maker sign (see [the payload section](#non-standard-payload) above)
+Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without being subject to the volatility of on-chain gas prices or chain health. RFQ fills are also much less CU intensive (<10x) compared to AMM swaps, and can save gas in the long run on fills. Today, RFQ, when operating in Ultra mode, charges a dynamic fee that is selected based on factors like tokens and size. The dynamic fee amount is forwarded to webhooks in the quote request parameters and it is contained in the message that both taker and maker sign (see [the payload section](#non-standard-payload) above). In manual mode, the fee is a flat 2pbs.
 
 ℹ️ Webhooks do not need to account for fees when quoting; the fee is applied directly by the RFQ system during transaction building. For example, for a quote of 1 SOL to 1000 USDC with a fee of 100 bps, only 990 USDC will be transferred out of the market maker account, while 10 USDC will be collected as a fee. Note that the fee is not automatically transferred and will be accounted for asynchronously on a regular basis.
 
@@ -194,3 +194,7 @@ No, there is no penalty. It is up to the webhook to decide whether to respond wi
 For example, suppose a webhook provides quotes for USDC/SOL only within a range of 100 to 1000 USDC. If it receives a quote request for 10 USDC → SOL, it will respond with `404 Not Found`, since the amount is outside its quoting range.
 
 In another case, a webhook may only support one-way quotes (USDC → SOL) but not SOL → USDC. If it receives a request for SOL → USDC, it will also return `404 Not Found`.
+
+##### Is there a fee applied to stable-to-stable swaps?
+
+No. Stable to stable swaps are exempt from fees.
