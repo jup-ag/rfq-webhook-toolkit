@@ -115,6 +115,15 @@ Market Makers should return appropriate HTTP status codes along with error messa
 - `401 Unauthorized`:  Authorization failed. For example the `X-API-KEY` is missing or incorrect
 - `50x Server Errors`: The webhook is offline or unable to respond. If the status persist, the webhook will be temporarily suspended and will not receive requests.
 
+#### Timeouts
+A webhook must respond within 250 ms of receiving a quote request. If it fails to do so, the RFQ system will proceed with the quotes available at that time.
+
+When sending the quote request, the RFQ system includes the following headers:
+
+* `x-request-start`: The millisecond timestamp indicating when the request was sent.
+* `x-request-timeout`: The millisecond timeout for the request (currently set to 250 ms).
+
+
 ## Expiry information
 
 We enforce a fixed expiry timing flow for all quotes and transactions:
@@ -181,7 +190,7 @@ Yes, native SOL is fully supported in the order-engine program for both the take
 
 ##### Do faster quotes receive priority?
 
-No, the RFQ system dispatches the quote request to all registered webhooks simultaneously with a **250ms** timeout. During this time, all received quotes are compared to select the best one. The selection prioritizes the quote value first (In the unlikely scenario where two quotes have identical values, the quote from the webhook with the faster response time will be actually prioritized).
+No, the RFQ system dispatches the quote request to all registered webhooks simultaneously. All quotes received within the quote timeout are compared to select the best one. The selection prioritizes the quote value first (In the unlikely scenario where two quotes have identical values, the quote from the webhook with the faster response time will be actually prioritized).
 
 ##### Shall a webhook verify swap requests?
 
