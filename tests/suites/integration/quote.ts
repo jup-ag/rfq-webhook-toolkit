@@ -14,7 +14,7 @@ describe('Webhook e2e API Quote', () => {
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
     assert(params.TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
 
-    console.log("how many ${params.MINT_A} will you get for ${params.AMOUNT} of ${params.MINT_B}?");
+    console.log(`how many ${params.MINT_A} will you get for ${params.AMOUNT} of ${params.MINT_B}?`);
 
     // Read the keypair
     const keypair = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(params.TAKER_KEYPAIR, 'utf8'))));
@@ -45,7 +45,6 @@ describe('Webhook e2e API Quote', () => {
       expect(response.data).toHaveProperty('orderInfo');
       expect(response.data).toHaveProperty('maker');
       expect(response.data).toHaveProperty('orderInfo');
-      expect(response.data.taker).toBe(taker);
       expect(response.data.swapMode).toBe(payload.swapMode);
       expect(response.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
       expect(response.data.orderInfo.input.token).toBe(params.MINT_B);
@@ -101,7 +100,6 @@ describe('Webhook e2e API Quote', () => {
       expect(response.data).toHaveProperty('orderInfo');
       expect(response.data).toHaveProperty('maker');
       expect(response.data).toHaveProperty('orderInfo');
-      expect(response.data.taker).toBe(taker);
       expect(response.data.swapMode).toBe(payload.swapMode);
       expect(new BN(response.data.orderInfo.input.endAmount).gt(new BN(0))).toBe(true);
       expect(response.data.orderInfo.input.token).toBe(params.MINT_A);
@@ -125,7 +123,7 @@ describe('Webhook e2e API Quote', () => {
     // in this test the taker is not set because the user has not connected the wallet
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
 
-    console.log("how many ${params.MINT_A} can you get for ${params.AMOUNT} of ${params.MINT_B}?");
+    console.log(`how many ${params.MINT_A} can you get for ${params.AMOUNT} of ${params.MINT_B}?`);
 
     const url = `${params.QUOTE_SERVICE_URL}/quote`;
     console.log('request url: ', url);

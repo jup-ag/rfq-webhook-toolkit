@@ -29,7 +29,7 @@ describe('Webhook API Quote', () => {
     const url = `${WEBHOOK_URL}/quote`;
     console.log('request url: ', url);
 
-    console.log("how many ${params.MINT_A} will you get for ${params.AMOUNT} of ${params.MINT_B}?");
+    console.log(`how many ${params.MINT_A} will you get for ${params.AMOUNT} of ${params.MINT_B}?`);
 
     const payload = {
       amount: `${params.AMOUNT}`,
@@ -77,7 +77,7 @@ describe('Webhook API Quote', () => {
     const url = `${WEBHOOK_URL}/quote`;
     console.log('request url: ', url);
 
-    console.log("how many ${params.MINT_A} do you need to get ${params.AMOUNT} of ${params.MINT_B}?");
+    console.log(`how many ${params.MINT_A} do you need to get ${params.AMOUNT} of ${params.MINT_B}?`);
 
     const payload = {
       amount: `${params.AMOUNT}`,

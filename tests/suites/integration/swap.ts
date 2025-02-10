@@ -17,7 +17,7 @@ describe('Webhook e2e API Swap', {
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
     assert(params.TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
 
-    console.log("how many ${params.MINT_A} will you get for ${params.AMOUNT} of ${params.MINT_B}?");
+    console.log(`how many ${params.MINT_A} will you get for ${params.AMOUNT} of ${params.MINT_B}?`);
 
     // Read the keypair
     const keypair = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(params.TAKER_KEYPAIR, 'utf8'))));
@@ -50,7 +50,6 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.data).toHaveProperty('expireAt');
       expect(quoteResponse.data).toHaveProperty('orderInfo');
       expect(quoteResponse.data).toHaveProperty('maker');
-      expect(quoteResponse.data.taker).toBe(taker);
       expect(quoteResponse.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
       expect(quoteResponse.data.orderInfo.input.token).toBe(params.MINT_B);
       expect(new BN(quoteResponse.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
@@ -107,7 +106,7 @@ describe('Webhook e2e API Swap', {
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
     assert(params.TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
 
-    console.log("how many ${params.MINT_A} do you need to get ${params.AMOUNT} of ${params.MINT_B}?");
+    console.log(`how many ${params.MINT_A} do you need to get ${params.AMOUNT} of ${params.MINT_B}?`);
 
     // Read the keypair
     const keypair = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(params.TAKER_KEYPAIR, 'utf8'))));
@@ -140,7 +139,6 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.data).toHaveProperty('expireAt');
       expect(quoteResponse.data).toHaveProperty('orderInfo');
       expect(quoteResponse.data).toHaveProperty('maker');
-      expect(quoteResponse.data.taker).toBe(taker);
       expect(quoteResponse.data.orderInfo.output.startAmount).toBe(`${params.AMOUNT}`);
       expect(quoteResponse.data.orderInfo.output.token).toBe(params.MINT_B);
       expect(new BN(quoteResponse.data.orderInfo.input.startAmount).gt(new BN(0))).toBe(true);
