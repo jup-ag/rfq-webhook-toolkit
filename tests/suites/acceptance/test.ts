@@ -9,7 +9,7 @@ const solanaWeb3 = require('@solana/web3.js');
 
 // Base API URL, load from environment variable or use default
 const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:8080';
-
+const HEADERS = params.API_KEY ? { 'X-API-KEY': params.API_KEY } : {};
 
 // Helper function to validate Solana addresses
 function isValidSolanaAddress(address) {
@@ -44,7 +44,7 @@ describe('Webhook API Quote', () => {
       tokenOut: params.MINT_A
     }
 
-    const response = await axios.post(url, payload).then((response) => {
+    await axios.post(url, payload, {headers: HEADERS}).then((response) => {
       console.log("response --> ", response.data);
 
       expect(response.status).toBe(200);
@@ -92,7 +92,7 @@ describe('Webhook API Quote', () => {
       tokenOut: params.MINT_B
     }
 
-    const response = await axios.post(url, payload).then((response) => {
+    await axios.post(url, payload, {headers: HEADERS}).then((response) => {
       console.log("response --> ", response.data);
 
       expect(response.status).toBe(200);
@@ -137,7 +137,7 @@ describe('Webhook API Quote', () => {
       tokenOut: "fake3KUxqvJ5erXobKTYFtL2BpTgGzy7B9AcRcXeCwWvFM",
     }
 
-    const response = await axios.post(url, payload).then((response) => {
+    await axios.post(url, payload, {headers: HEADERS}).then((response) => {
       console.log("response --> ", response.data);
       assert.fail('expected 404 response');
     }).catch((error) => {
@@ -164,15 +164,31 @@ describe('Webhook API Quote', () => {
       transaction: "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAIABw1+jAiHYL/eHd3PMsF/IJuCQu5SqvEx+s2I0OosbQsG8kjAG1BZAFRV2dywxrzs3LT7Wy6rwamoK1c5K6qkDwTmwoAL86DDaPJrpECH4O7FIcjNK8aXLr8U+vEPOkKqMIbT6oz1rKyozQUgdRIXXEPO9Upd2Z7eIKFrVSU3OPOX3N7E3kRk8Ll8XsOf5Ir4ISzHf+0ZUtqBSXSNVE5iS+sA4iF2IlhNfbkvqPIGGddbql5WIVIAOvUkFwCrBoXw04EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABHnZx8wQNd5yEfmetIwJ1wsr31vfni5WuKH7taLqMycG3fbh12Whk9nL4UbO63msHLSF7V9bN5E6jPWFfv8AqUpYSftyo7vpH9xbDmpX9jxaHLRbIGem7Qys02OVyKECjJclj04kifG7PRApFI4NgwtaE5na/xCEBI572Nvp+FnG+nrzvtutOj1l82qryXQxsbvkwtL24OR8pgIDRS9dYSdenhhyIvZ+yaOk0Giv3sQzHPEybygyONx7iDX7IHF2BAcACQMK0gAAAAAAAAcABQIdmAAACwYBBAEMBgkBAQoLAQACBQQDCAkMCQYjqGC3o1wKKKAAypo7AAAAAJgWfQEAAAAAaiqpZwAAAAAKAAAA"
     };
 
-    const response = await axios.post(url, payload);
+    await axios.post(url, payload).then((response) => {
+      console.log("response --> ", response.data);
 
-    console.log("response --> ", response.data);
 
-    const SIGNATURE_LENGTH = 88; // 64 bytes encoded in base58
+      expect(response.status).toBe(200);
+      expect(response.data.quoteId).toBe(payload.quoteId);
+      expect(response.data.state).toBe("accepted");
 
-    expect(response.status).toBe(200);
-    expect(response.data.quoteId).toBe(payload.quoteId);
-    expect(response.data.state).toBe("accepted");
+      //const SIGNATURE_LENGTH = 88; // 64 bytes encoded in base58
+
+    }).catch((error) => {
+      if(error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        assert.fail(`failed to swap: unexpected response status ${error.response.status}: ${error.response.data}`);
+      } else if(error.request) {
+        console.log("error.request --> ", error.request.data);
+        assert.fail('failed to swap: no response from server');
+      } else {
+        console.log("error --> ", error);
+        assert.fail('failed to swap: unknown error');
+      }
+    });
+
+
+
   });
 
   it('it should simulate a swap rejection', async () => {
@@ -185,15 +201,26 @@ describe('Webhook API Quote', () => {
       transaction: "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAIABw1+jAiHYL/eHd3PMsF/IJuCQu5SqvEx+s2I0OosbQsG8kjAG1BZAFRV2dywxrzs3LT7Wy6rwamoK1c5K6qkDwTmwoAL86DDaPJrpECH4O7FIcjNK8aXLr8U+vEPOkKqMIbT6oz1rKyozQUgdRIXXEPO9Upd2Z7eIKFrVSU3OPOX3N7E3kRk8Ll8XsOf5Ir4ISzHf+0ZUtqBSXSNVE5iS+sA4iF2IlhNfbkvqPIGGddbql5WIVIAOvUkFwCrBoXw04EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABHnZx8wQNd5yEfmetIwJ1wsr31vfni5WuKH7taLqMycG3fbh12Whk9nL4UbO63msHLSF7V9bN5E6jPWFfv8AqUpYSftyo7vpH9xbDmpX9jxaHLRbIGem7Qys02OVyKECjJclj04kifG7PRApFI4NgwtaE5na/xCEBI572Nvp+FnG+nrzvtutOj1l82qryXQxsbvkwtL24OR8pgIDRS9dYSdenhhyIvZ+yaOk0Giv3sQzHPEybygyONx7iDX7IHF2BAcACQMK0gAAAAAAAAcABQIdmAAACwYBBAEMBgkBAQoLAQACBQQDCAkMCQYjqGC3o1wKKKAAypo7AAAAAJgWfQEAAAAAaiqpZwAAAAAKAAAA"
     };
 
-    const response = await axios.post(url, payload);
+    await axios.post(url, payload, {headers: HEADERS}).then((response) => {
+      console.log("response --> ", response.data);
 
-    console.log("response --> ", response.data);
-
-    expect(response.status).toBe(200);
-    expect(response.data.quoteId).toBe(payload.quoteId);
-    expect(response.data.state).toBe("rejected");
-    expect(response.data).toHaveProperty('rejectionReason');
-    expect(response.data.rejectionReason).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(response.data.quoteId).toBe(payload.quoteId);
+      expect(response.data.state).toBe("rejected");
+      expect(response.data).toHaveProperty('rejectionReason');
+      expect(response.data.rejectionReason).toBeTruthy();
+    }).catch((error) => {
+      if(error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        assert.fail(`failed to swap: unexpected response status ${error.response.status}: ${error.response.data}`);
+      } else if(error.request) {
+        console.log("error.request --> ", error.request.data);
+        assert.fail('failed to swap: no response from server');
+      } else {
+        console.log("error --> ", error);
+        assert.fail('failed to swap: unknown error');
+      }
+    });
   });
 
 
@@ -201,17 +228,26 @@ describe('Webhook API Quote', () => {
     const url = `${WEBHOOK_URL}/tokens`;
     console.log('request url: ', url);
 
-    const response = await axios.get(url);
+    await axios.get(url, {headers: HEADERS}).then((response) => {
+      console.log("response --> ", response.data);
+      expect(response.status).toBe(200);
+      expect(response.data.length).toBeGreaterThanOrEqual(0);
 
-    console.log("response --> ", response.data);
-
-    expect(response.status).toBe(200);
-    expect(response.data.length).toBeGreaterThanOrEqual(0);
-
-    for (let tokenAddress of response.data) {
-      expect(isValidSolanaAddress(tokenAddress)).toBe(true);
-    }
-
+      for (let tokenAddress of response.data) {
+        expect(isValidSolanaAddress(tokenAddress)).toBe(true);
+      }
+    }).catch((error) => {
+      if(error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        assert.fail(`failed to swap: unexpected response status ${error.response.status}: ${error.response.data}`);
+      } else if(error.request) {
+        console.log("error.request --> ", error.request.data);
+        assert.fail('failed to swap: no response from server');
+      } else {
+        console.log("error --> ", error);
+        assert.fail('failed to swap: unknown error');
+      }
+    });
   });
 
 

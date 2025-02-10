@@ -10,3 +10,7 @@ export const AMOUNT = process.env.AMOUNT || 1_000_000;
 export const MINT_A = process.env.MINT_A || WSOL;
 export const MINT_B = process.env.MINT_B || USDC;
 export const FEE_BPS = process.env.FEE_BPS || 2;
+
+
+// X-API-KEY
+export const API_KEY = process.env.API_KEY || false; // api key
