@@ -7,7 +7,9 @@ use utoipa::ToSchema;
 )]
 #[serde(rename_all = "camelCase")]
 pub enum QuoteType {
+    #[serde(alias = "exactIn", alias = "exact_in", alias = "ExactIn")]
     ExactIn,
+    #[serde(alias = "exactOut", alias = "exact_out", alias = "ExactOut")]
     ExactOut,
 }
 

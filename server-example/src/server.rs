@@ -22,7 +22,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration, vec};
 
 use axum::{
     extract::{rejection::JsonRejection, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -36,7 +36,11 @@ use tower_http::{
 
 use tracing::Level as TraceLevel;
 
-use webhook_api::{enums::SwapState, requests::*, responses::*};
+use webhook_api::{
+    enums::{QuoteType, SwapState},
+    requests::*,
+    responses::*,
+};
 
 use crate::config::Config;
 
@@ -90,7 +94,7 @@ impl IntoResponse for ApiError {
 
 /// OpenAPI spec for the API
 /// This is used to generate the OpenAPI spec for the API
-#[utoipauto(paths = "./server-example/src")]
+#[utoipauto(paths = "server-example/src")]
 #[derive(OpenApi)]
 #[openapi(
     tags(
@@ -123,9 +127,14 @@ responses(
 async fn example_quote(
     State(state): State<Arc<AppState>>,
     Query(_queries): Query<HashMap<String, String>>,
+    headers: HeaderMap,
     WithRejection(Json(quote_request), _): WithRejection<Json<QuoteRequest>, ApiError>,
 ) -> Result<Json<QuoteResponse>, ApiError> {
-    tracing::info!("Received quote request: {:?}", quote_request);
+    tracing::info!(
+        "Received quote request: {:?}, headers: {:?}",
+        quote_request,
+        headers
+    );
 
     // if the  the token pair is not supported, return 404
     if !SUPPORTED_TOKENS.contains(&quote_request.token_in)
@@ -141,22 +150,47 @@ async fn example_quote(
 
     let maker_pubkey = state.keypair.pubkey().to_string();
 
-    let quote_res = QuoteResponse {
-        request_id: quote_request.request_id,
-        quote_id: quote_request.quote_id,
-        taker: quote_request.taker,
-        token_in: quote_request.token_in,
-        amount_in: quote_request.amount.clone(),
-        token_out: quote_request.token_out,
-        quote_type: quote_request.quote_type,
-        protocol: quote_request.protocol,
-        amount_out: "100000000".to_string(), // hardcoded amount out
-        maker: maker_pubkey,
-        prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
+    let example_quoted_amount = "123123123".to_string();
+
+    // different logic between ExactIn and ExactOut
+
+    let quote = match quote_request.quote_type {
+        QuoteType::ExactIn => {
+            // compute the amount out based on the amount in
+            QuoteResponse {
+                request_id: quote_request.request_id,
+                quote_id: quote_request.quote_id,
+                taker: quote_request.taker,
+                token_in: quote_request.token_in,
+                amount_in: quote_request.amount.clone(),
+                token_out: quote_request.token_out,
+                quote_type: quote_request.quote_type,
+                protocol: quote_request.protocol,
+                amount_out: example_quoted_amount,
+                maker: maker_pubkey,
+                prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
+            }
+        }
+        QuoteType::ExactOut => {
+            // compute the amount in based on the amount out
+            QuoteResponse {
+                request_id: quote_request.request_id,
+                quote_id: quote_request.quote_id,
+                taker: quote_request.taker,
+                token_in: quote_request.token_in,
+                amount_in: example_quoted_amount,
+                token_out: quote_request.token_out,
+                quote_type: quote_request.quote_type,
+                protocol: quote_request.protocol,
+                amount_out: quote_request.amount.clone(),
+                maker: maker_pubkey,
+                prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
+            }
+        }
     };
 
     // Build jupiter quote request
-    Ok(Json(quote_res))
+    Ok(Json(quote))
 }
 
 /// Example swap handler
