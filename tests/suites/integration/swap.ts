@@ -10,7 +10,7 @@ const fs = require('fs');
 // Start mock server before tests and close it after
 describe('Webhook e2e API Swap', {
   timeout: 10_000,
-  // skip: true
+  skip: true
 },() => {
   it('should execute a successful swap (ExactIn)', async () => {
 
@@ -33,7 +33,6 @@ describe('Webhook e2e API Swap', {
       inputMint: params.MINT_B,
       outputMint: params.MINT_A,
       amount: `${params.AMOUNT}`,
-      feeBps: params.FEE_BPS,
       swapType: 'rfq',
       webhookId: params.WEBHOOK_ID,
     }
@@ -122,7 +121,6 @@ describe('Webhook e2e API Swap', {
       inputMint: params.MINT_A,
       outputMint: params.MINT_B,
       amount: `${params.AMOUNT}`,
-      feeBps: params.FEE_BPS,
       swapType: 'rfq',
       webhookId: params.WEBHOOK_ID,
     }

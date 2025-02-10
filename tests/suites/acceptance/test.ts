@@ -81,7 +81,7 @@ describe('Webhook API Quote', () => {
 
     const payload = {
       amount: `${params.AMOUNT}`,
-      feeBps: 0,
+      feeBps: params.FEE_BPS,
       protocol: "v1",
       quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
       quoteType: "exactOut",
@@ -125,7 +125,7 @@ describe('Webhook API Quote', () => {
 
     const payload = {
       amount: `${params.AMOUNT}`,
-      feeBps: 0,
+      feeBps: params.FEE_BPS,
       protocol: "v1",
       quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
       quoteType: "exactIn",

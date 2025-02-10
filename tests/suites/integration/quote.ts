@@ -30,12 +30,11 @@ describe('Webhook e2e API Quote', () => {
       inputMint: params.MINT_B,
       outputMint: params.MINT_A,
       amount: `${params.AMOUNT}`,
-      feeBps: params.FEE_BPS,
       swapType: 'rfq',
       webhookId: params.WEBHOOK_ID,
     }
 
-    const response = await axios.get(url, { params: payload })
+    await axios.get(url, { params: payload })
     .then((response) => {
       console.log("response --> ", response.data);
       expect(response.status).toBe(200);
@@ -69,7 +68,7 @@ describe('Webhook e2e API Quote', () => {
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
     assert(params.TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
 
-    console.log("how many ${params.MINT_A} do you need to get ${params.AMOUNT} of ${params.MINT_B}?");
+    console.log(`how many ${params.MINT_A} do you need to get ${params.AMOUNT} of ${params.MINT_B}?`);
 
     // Read the keypair
     const keypair = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(params.TAKER_KEYPAIR, 'utf8'))));
@@ -85,7 +84,6 @@ describe('Webhook e2e API Quote', () => {
       inputMint: params.MINT_A,
       outputMint: params.MINT_B,
       amount: `${params.AMOUNT}`,
-      feeBps: params.FEE_BPS,
       swapType: 'rfq',
       webhookId: params.WEBHOOK_ID,
     }
@@ -132,7 +130,6 @@ describe('Webhook e2e API Quote', () => {
       inputMint: params.MINT_B,
       outputMint: params.MINT_A,
       amount: `${params.AMOUNT}`,
-      feeBps: params.FEE_BPS,
       swapType: 'rfq',
       webhookId: params.WEBHOOK_ID,
     }
