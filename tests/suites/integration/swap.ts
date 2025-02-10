@@ -10,7 +10,7 @@ const fs = require('fs');
 // Start mock server before tests and close it after
 describe('Webhook e2e API Swap', {
   timeout: 10_000,
-  skip: true
+  // skip: true
 },() => {
   it('should execute a successful swap (ExactIn)', async () => {
 
