@@ -88,7 +88,7 @@ GET https://your-api-endpoint.com/jupiter/rfq/tokens
 
 If you require an API key to access your endpoints, please provide it to us during the registration process. The API Key will be passed to the webhook as a header `X-API-KEY`.
 
-## Api Documentation
+## API Documentation
 
 REST API  documentation is provided in OpenAPI format. You can find the documentation [here](./openapi).
 
@@ -171,7 +171,11 @@ Jupiter RFQ allows MMs a way to provide liquidity, adjust their quotes without b
 
 #### Fulfillment Requirements
 
-Market makers are expected to comply with 90% of the quotation swap requests provided before getting penalized.
+Market makers are expected to comply with 95% of the quotation swap requests provided before getting penalized.
+
+We will enforce this rule by turning off MMs who fall below 95% in a 1-hour window.
+
+If this happens to you, please reach out to us on Telegram to confirm that you are ready to resume operations and we will re-enable your webhook.
 
 #### Transaction Crafting
 
