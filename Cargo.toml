@@ -9,7 +9,7 @@ edition = "2021"
 overflow-checks = true
 
 [workspace.dependencies]
-anyhow = "1.0.95"
+anyhow = "1.0.96"
 anchor-lang = "0.30"
 anchor-spl = "0.30"
 async-std = { version = "1.13", features = ["attributes", "tokio1"] }
@@ -36,24 +36,24 @@ spl-token-client = "0.12.1"
 solana-rpc-client = "~2.0"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "^1.0"
-strum = { version = "0.26.3", features = ["derive"] }
+strum = { version = "0.27.1", features = ["derive"] }
 test-case = "3.3.1"
 tokio = "1.43.0"
 tower = { version = "0.5.2" }
 tower-http = { version = "0.6.2" }
 tower-cookies = "0.11.0"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1.13.1", features = ["v4"] }
+tracing-subscriber = { version = "^0.3", features = ["env-filter"] }
+uuid = { version = "1.14.0", features = ["v4"] }
 chrono = { version = "0.4.39" }
 mockito = "1.6.1"
 bytemuck = "1.21.0"
 uint = "0.10.0"
 url = "2.5.4"
 itertools = "0.14.0"
-once_cell = "1.20.2"
+once_cell = "1.20.3"
 num_cpus = "1.16"
-hex-literal = "0.4.1"
+hex-literal = "1.0.0"
 hex = "0.4.3"
 thiserror = "2.0.11"
 utoipa = { version = "5.3.1" }
