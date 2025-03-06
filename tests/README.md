@@ -101,7 +101,7 @@ The most probable cause is that the quote **fails simulation**. Every quote is s
 Regarding point **#3**, the Maker is required to have the **ATA configured** for all tokens it lists in transactions.  
 
 #### The webhook returns the best quote, but it is not the one presented to the user
-See [this section](#the-webhook-provides-a-quote-but-the-rfq-returns-404) for more details.  
+See the section ["The webhook provides a quote, but the RFQ returns a 404"](#the-webhook-provides-a-quote-but-the-rfq-returns-404).  
  
  
 
