@@ -98,7 +98,7 @@ The most probable cause is that the quote **fails simulation**. Every quote is s
 3. The Maker does not have an **Associated Token Account (ATA)** for either the input or output mint.  
 4. The Taker does not have enough funds for the swap.  
 
-Regarding point **#3**, the Maker is required to have the **ATA configured** for all tokens it lists in transactions.  
+Regarding point **#3**, the Maker is required to have the **ATA configured** for all tokens it advertises.
 
 #### The webhook returns the best quote, but it is not the one presented to the user
 See the section ["The webhook provides a quote, but the RFQ returns a 404"](#the-webhook-provides-a-quote-but-the-rfq-returns-404).  
