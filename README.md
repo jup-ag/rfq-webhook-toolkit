@@ -153,7 +153,7 @@ In order to receive relevant quote requests, market makers need to advertise the
 
 To facilitate the integration, in this repository you will find a sample server that implements the webhook API. The server is written in Rust and can be found in the [`server-example`](./server-example/) directory.
 
-In addition, we provide a set of test suites to verify the implementation of the webhook. The tests, and their instructions, can be found in the [`tests`](./tests/) directory.
+In addition, we provide a set of test suites to verify the implementation of the webhook. The tests and their instructions can be found in the [`tests`](./tests/) directory. The [troubleshooting](./tests/README.md#troubleshooting) section contains the most common issues that arise during integration.
 
 ### Non-standard payload
 
