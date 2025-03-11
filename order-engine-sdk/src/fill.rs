@@ -176,7 +176,7 @@ pub fn validate_similar_fill_sanitized_message(
     // Validate that we have at least the original number of instructions
     ensure!(
         sanitized_instructions.len() >= original_instructions.len(),
-        "Number of instructions in sanitized message cannot be less than original"
+        "Number of instructions cannot be less than original"
     );
 
     let mut validated_similar_fill = None;
