@@ -129,6 +129,7 @@ When sending the quote request, the RFQ system includes the following headers:
 We enforce a fixed expiry timing flow for all quotes and transactions. When creating a quote, the transaction expiry is set to **50 seconds** from the creation time. Of this, **25 seconds** are reserved for the webhook to verify, sign, and send the transaction on-chain. The remaining **25 seconds** are allocated for the user to accept the quote. Additionally, the frontend automatically re-quotes every 5 seconds.
 
 Summary:
+
 * `transaction_ttl`: 50 seconds
 * `maker_reserved_time`: 25 seconds
 * `user_time` = `transaction_ttl - maker_reserved_time`: 25 seconds
