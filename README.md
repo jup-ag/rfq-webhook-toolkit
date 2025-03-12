@@ -1,6 +1,6 @@
 # RFQ Webhook Toolkit
 
-:mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. If you are interested in being a MM on Jupiter RFQ, please read the below toolkit and reach out to [Soju](https://t.me/sojuuuu54) or [Ben](https://t.me/benliewxyz) on Telegram to register your webhook.
+:mega: NOTE: This section is still heavily subjected to changes, and we are open to suggestions or feedbacks on ways to improve and streamline the integration. If you are interested in being a MM on Jupiter RFQ, please read the below toolkit and reach out to [Jo](https://t.me/biuu0x) on Telegram to register your webhook.
 
 
 ## Order Engine
@@ -126,23 +126,21 @@ When sending the quote request, the RFQ system includes the following headers:
 
 ## Expiry information
 
-We enforce a fixed expiry timing flow for all quotes and transactions:
+We enforce a fixed expiry timing flow for all quotes and transactions. When creating a quote, the transaction expiry is set to **50 seconds** from the creation time. Of this, **25 seconds** are reserved for the webhook to verify, sign, and send the transaction on-chain. The remaining **25 seconds** are allocated for the user to accept the quote. Additionally, the frontend automatically re-quotes every 5 seconds.
 
-1. When creating a quote, we set transaction expiry to **55 seconds** from creation time
-2. On the frontend:
-   - If remaining time before expiry is less than **40 seconds** when user needs to sign, we will automatically re-quote
-   - The frontend will also do a re-quote every **15s**
-3. On the backend:
-   - If remaining time before expiry is less than **25 seconds** when our /swap endpoint receives the request, we will reject the swap before forwarding to market makers
+Summary:
 
-This fixed expiry flow simplifies the integration by:
+* `transaction_ttl`: 50 seconds
+* `maker_reserved_time`: 25 seconds
+* `user_time` = `transaction_ttl - maker_reserved_time`: 25 seconds
 
-- Removing the need for market makers to specify custom expiry times in quote requests
-- Providing consistent behavior across all quotes and transactions
-- Allowing for clear timeout boundaries at different stages of the flow
+This fixed expiry flow simplifies integration by:
+
+* Removing the need for market makers to specify custom expiry times in quote requests
+* Providing consistent behavior across all quotes and transactions
+* Establishing clear timeout boundaries at different stages of the flow
 
 Note: These expiry thresholds may be adjusted based on performance and feedback.
-
 
 ## Advertising supported tokens
 
