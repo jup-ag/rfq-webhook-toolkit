@@ -10,8 +10,13 @@ use solana_sdk::{
     sysvar::instructions::BorrowedInstruction,
 };
 
-const ALLOWED_APPENDED_PROGRAM_IDS: &[Pubkey] =
-    &[pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95")];
+const LIGHTHOUSE_PROGRAM_ID: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95");
+
+// We only allow certain instruction from the Lighthouse program.
+//
+// If we allow the MemoryWrite instruction, the hacker can drain the signer.
+// https://github.com/Jac0xb/lighthouse/blob/main/programs/lighthouse/lighthouse.json
+const ALLOWED_LIGHTHOUSE_DISCRIMINATORS: &[u8] = &[5, 6, 9, 10];
 
 pub struct Order {
     pub taker: Pubkey,
@@ -284,16 +289,21 @@ pub fn validate_similar_fill_sanitized_message(
     for (
         BorrowedInstruction {
             program_id,
-            accounts: _accounts,
-            data: _data,
+            accounts: _,
+            data,
         },
         index,
     ) in sanitized_instructions_iter.zip(original_len..)
     {
-        // Only allow instructions from the approved program list
+        // Only allow Lighthouse program with specific instruction discriminators
         ensure!(
-            ALLOWED_APPENDED_PROGRAM_IDS.contains(program_id),
-            "Additional instruction from unauthorized program at {index}, {program_id}"
+            program_id == &LIGHTHOUSE_PROGRAM_ID,
+            "Additional instructions can only be from Lighthouse program at {index}"
+        );
+
+        ensure!(
+            !data.is_empty() && ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(&data[0]),
+            "Invalid Lighthouse instruction discriminator at {index}"
         );
     }
 
