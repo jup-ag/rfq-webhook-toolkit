@@ -1,5 +1,5 @@
 use crate::order_engine;
-use anchor_lang::{AnchorDeserialize, Discriminator};
+use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
 use anchor_spl::associated_token;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use solana_sdk::{
@@ -9,6 +9,14 @@ use solana_sdk::{
     pubkey::Pubkey,
     sysvar::instructions::BorrowedInstruction,
 };
+
+const LIGHTHOUSE_PROGRAM_ID: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95");
+
+// We only allow certain instruction from the Lighthouse program.
+//
+// If we allow the MemoryWrite instruction, the hacker can drain the signer.
+// https://github.com/Jac0xb/lighthouse/blob/main/programs/lighthouse/lighthouse.json
+const ALLOWED_LIGHTHOUSE_DISCRIMINATORS: &[u8] = &[5, 6, 9, 10];
 
 pub struct Order {
     pub taker: Pubkey,
@@ -152,11 +160,6 @@ pub fn validate_similar_fill_sanitized_message(
     sanitized_message: SanitizedMessage,
     original_sanitized_message: SanitizedMessage,
 ) -> Result<ValidatedSimilarFill> {
-    ensure!(
-        original_sanitized_message.recent_blockhash() == sanitized_message.recent_blockhash(),
-        "Recent blockhash has been modified"
-    );
-
     let original_message_header = original_sanitized_message.header();
     ensure!(
         sanitized_message.header() == original_message_header,
@@ -175,16 +178,20 @@ pub fn validate_similar_fill_sanitized_message(
     let sanitized_instructions = sanitized_message.decompile_instructions();
     let original_instructions = original_sanitized_message.decompile_instructions();
 
-    // Validate that we have the same number of instructions
+    // Validate that we have at least the original number of instructions
     ensure!(
-        sanitized_instructions.len() == original_instructions.len(),
-        "Number of instructions did not match"
+        sanitized_instructions.len() >= original_instructions.len(),
+        "Number of instructions cannot be less than original"
     );
 
     let mut validated_similar_fill = None;
     let mut compute_unit_price = None;
+
+    // First check matching instructions between original and sanitized
+    let mut sanitized_instructions_iter = sanitized_instructions.into_iter();
+    let original_len = original_instructions.len();
+
     for (
-        index,
         (
             BorrowedInstruction {
                 program_id,
@@ -197,10 +204,11 @@ pub fn validate_similar_fill_sanitized_message(
                 data: original_data,
             },
         ),
-    ) in sanitized_instructions
-        .into_iter()
+        index,
+    ) in sanitized_instructions_iter
+        .by_ref()
         .zip(original_instructions)
-        .enumerate()
+        .zip(0..)
     {
         ensure!(
             program_id == original_program_id,
@@ -275,6 +283,28 @@ pub fn validate_similar_fill_sanitized_message(
                 expire_at: fill_ix.expire_at,
             })
         }
+    }
+
+    // Check any additional instructions in sanitized_instructions
+    for (
+        BorrowedInstruction {
+            program_id,
+            accounts: _,
+            data,
+        },
+        index,
+    ) in sanitized_instructions_iter.zip(original_len..)
+    {
+        // Only allow Lighthouse program with specific instruction discriminators
+        ensure!(
+            program_id == &LIGHTHOUSE_PROGRAM_ID,
+            "Additional instructions can only be from Lighthouse program at {index}"
+        );
+
+        ensure!(
+            !data.is_empty() && ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(&data[0]),
+            "Invalid Lighthouse instruction discriminator at {index}"
+        );
     }
 
     validated_similar_fill.context("Missing validated fill instruction")
