@@ -295,14 +295,15 @@ pub fn validate_similar_fill_sanitized_message(
         index,
     ) in sanitized_instructions_iter.zip(original_len..)
     {
-        // Only allow Lighthouse program with specific instruction discriminators
         ensure!(
             program_id == &LIGHTHOUSE_PROGRAM_ID,
             "Additional instructions can only be from Lighthouse program at {index}"
         );
 
         ensure!(
-            !data.is_empty() && ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(&data[0]),
+            data.get(0)
+                .map(|discriminator| ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(discriminator))
+                .unwrap_or(false),
             "Invalid Lighthouse instruction discriminator at {index}"
         );
     }
