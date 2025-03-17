@@ -147,6 +147,7 @@ pub fn validate_fill_sanitized_message(
     })
 }
 
+#[derive(PartialEq, Debug)]
 pub struct ValidatedSimilarFill {
     pub taker: Pubkey,
     pub input_amount: u64,
@@ -160,18 +161,22 @@ pub fn validate_similar_fill_sanitized_message(
     sanitized_message: SanitizedMessage,
     original_sanitized_message: SanitizedMessage,
 ) -> Result<ValidatedSimilarFill> {
+    let message_header = original_sanitized_message.header();
     let original_message_header = original_sanitized_message.header();
-    ensure!(
-        sanitized_message.header() == original_message_header,
-        "Message header has been modified"
-    );
 
-    for (original_signer, signer) in original_sanitized_message
+    ensure!(
+        original_message_header.num_required_signatures == message_header.num_required_signatures,
+        "Number of required signatures did not match"
+    );
+    let mut account_keys_iter = sanitized_message.account_keys().iter();
+    for original_signer in original_sanitized_message
         .account_keys()
         .iter()
-        .zip(sanitized_message.account_keys().iter())
         .take(usize::from(original_message_header.num_required_signatures))
     {
+        let signer = account_keys_iter
+            .next()
+            .context("Not enough account keys to validate signer")?;
         ensure!(signer == original_signer, "Signer did not match");
     }
 
@@ -192,24 +197,21 @@ pub fn validate_similar_fill_sanitized_message(
     let original_len = original_instructions.len();
 
     for (
-        (
-            BorrowedInstruction {
-                program_id,
-                accounts,
-                data,
-            },
-            BorrowedInstruction {
-                program_id: original_program_id,
-                accounts: original_accounts,
-                data: original_data,
-            },
-        ),
         index,
-    ) in sanitized_instructions_iter
-        .by_ref()
-        .zip(original_instructions)
-        .zip(0..)
+        BorrowedInstruction {
+            program_id: original_program_id,
+            accounts: original_accounts,
+            data: original_data,
+        },
+    ) in original_instructions.into_iter().enumerate()
     {
+        let BorrowedInstruction {
+            program_id,
+            accounts,
+            data,
+        } = sanitized_instructions_iter
+            .next()
+            .context("Missing instruction")?;
         ensure!(
             program_id == original_program_id,
             "Instruction program id did not match the original message at index {index}, {original_program_id}"
@@ -287,26 +289,197 @@ pub fn validate_similar_fill_sanitized_message(
 
     // Check any additional instructions in sanitized_instructions
     for (
+        index,
         BorrowedInstruction {
             program_id,
             accounts: _,
             data,
         },
-        index,
-    ) in sanitized_instructions_iter.zip(original_len..)
+    ) in sanitized_instructions_iter.enumerate()
     {
+        let real_index = index + original_len;
         ensure!(
             program_id == &LIGHTHOUSE_PROGRAM_ID,
-            "Additional instructions can only be from Lighthouse program at {index}"
+            "Additional instructions can only be from Lighthouse program at {real_index}"
         );
 
         ensure!(
             data.get(0)
                 .map(|discriminator| ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(discriminator))
                 .unwrap_or(false),
-            "Invalid Lighthouse instruction discriminator at {index}"
+            "Invalid Lighthouse instruction discriminator at index {real_index}"
         );
     }
 
     validated_similar_fill.context("Missing validated fill instruction")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+    use anchor_lang::{prelude::*, InstructionData, ToAccountMetas};
+    use solana_sdk::{
+        hash::Hash,
+        instruction::Instruction,
+        message::{
+            v0::{self, LoadedAddresses},
+            SanitizedVersionedMessage, SimpleAddressLoader, VersionedMessage,
+        },
+        system_program,
+    };
+
+    fn make_sanitized_transaction(
+        payer: &Pubkey,
+        instructions: &[Instruction],
+        recent_blockhash: Hash,
+    ) -> SanitizedMessage {
+        SanitizedMessage::try_new(
+            SanitizedVersionedMessage::try_new(VersionedMessage::V0(
+                v0::Message::try_compile(payer, instructions, &[], recent_blockhash).unwrap(),
+            ))
+            .unwrap(),
+            SimpleAddressLoader::Enabled(LoadedAddresses::default()),
+            &HashSet::new(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_validate_similar_fill_sanitized_message() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let input_amount = 100;
+        let expire_at = 1000;
+        let input_mint = Pubkey::new_unique();
+        let taker_input_mint_token_account = Some(Pubkey::new_unique());
+
+        let fill_ix = Instruction {
+            program_id: order_engine::ID,
+            accounts: order_engine::client::accounts::Fill {
+                taker,
+                maker,
+                taker_input_mint_token_account,
+                maker_input_mint_token_account: Some(Pubkey::new_unique()),
+                taker_output_mint_token_account: Some(Pubkey::new_unique()),
+                maker_output_mint_token_account: Some(Pubkey::new_unique()),
+                input_mint,
+                input_token_program: Pubkey::new_unique(),
+                output_mint: Pubkey::new_unique(),
+                output_token_program: Pubkey::new_unique(),
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+            data: order_engine::client::args::Fill {
+                input_amount,
+                output_amount: 200,
+                expire_at,
+            }
+            .data(),
+        };
+
+        let original_sanitized_message =
+            make_sanitized_transaction(&maker, &[fill_ix.clone()], recent_blockhash);
+
+        let expected_validated_similar_fill = ValidatedSimilarFill {
+            taker,
+            input_amount,
+            input_mint,
+            taker_input_mint_token_account: taker_input_mint_token_account
+                .unwrap_or(order_engine::ID),
+            expire_at,
+        };
+
+        // Identical message
+        assert_eq!(
+            expected_validated_similar_fill,
+            validate_similar_fill_sanitized_message(
+                original_sanitized_message.clone(),
+                original_sanitized_message.clone()
+            )
+            .unwrap()
+        );
+
+        // Other blockhash
+        let sanitized_message =
+            make_sanitized_transaction(&maker, &[fill_ix.clone()], Hash::new_unique());
+        assert_eq!(
+            expected_validated_similar_fill,
+            validate_similar_fill_sanitized_message(
+                sanitized_message,
+                original_sanitized_message.clone()
+            )
+            .unwrap()
+        );
+
+        // Change accounts
+        let mut modified_fill_ix = fill_ix.clone();
+        modified_fill_ix.accounts[3].pubkey = Pubkey::new_unique();
+        let sanitized_message =
+            make_sanitized_transaction(&maker, &[modified_fill_ix], recent_blockhash);
+        assert_eq!(
+            "Instruction accounts did not match the original message 0, 61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH",
+            validate_similar_fill_sanitized_message(
+                sanitized_message,
+                original_sanitized_message.clone()
+            )
+            .unwrap_err()
+            .to_string()
+        );
+
+        // Change data
+        let mut modified_fill_ix = fill_ix.clone();
+        *modified_fill_ix.data.last_mut().unwrap() = 2;
+        let sanitized_message =
+            make_sanitized_transaction(&maker, &[modified_fill_ix], recent_blockhash);
+        assert_eq!(
+            "Instruction did not match the original at index 0, 61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH",
+            validate_similar_fill_sanitized_message(
+                sanitized_message,
+                original_sanitized_message.clone()
+            )
+            .unwrap_err()
+            .to_string()
+        );
+
+        // Add lighthouse instruction
+        let lighthouse_ix = Instruction {
+            program_id: LIGHTHOUSE_PROGRAM_ID,
+            accounts: vec![AccountMeta::new_readonly(input_mint, false)],
+            data: vec![5],
+        };
+        let sanitized_message = make_sanitized_transaction(
+            &maker,
+            &[fill_ix.clone(), lighthouse_ix.clone()],
+            recent_blockhash,
+        );
+        assert_eq!(
+            expected_validated_similar_fill,
+            validate_similar_fill_sanitized_message(
+                sanitized_message,
+                original_sanitized_message.clone()
+            )
+            .unwrap()
+        );
+
+        // Add forbidden lighthouse instruction
+        let mut forbidden_lighthouse_ix = lighthouse_ix.clone();
+        forbidden_lighthouse_ix.data[0] = 1;
+        let sanitized_message = make_sanitized_transaction(
+            &maker,
+            &[fill_ix.clone(), forbidden_lighthouse_ix],
+            recent_blockhash,
+        );
+        assert_eq!(
+            "Invalid Lighthouse instruction discriminator at index 1",
+            validate_similar_fill_sanitized_message(
+                sanitized_message,
+                original_sanitized_message.clone()
+            )
+            .unwrap_err()
+            .to_string()
+        );
+    }
 }
