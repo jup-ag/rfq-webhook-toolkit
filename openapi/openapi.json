@@ -14,7 +14,7 @@
         "tags": [
           "crate::server"
         ],
-        "summary": "Example quote handler",
+        "summary": "This middleware is used to handle the x-api-key header\nExample quote handler",
         "description": "This is an example quote handler that returns a hardcoded quote response",
         "operationId": "example_quote",
         "parameters": [
@@ -63,16 +63,6 @@
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -271,8 +261,7 @@
           "amount",
           "tokenOut",
           "quoteType",
-          "protocol",
-          "feeBps"
+          "protocol"
         ],
         "properties": {
           "amount": {
@@ -280,17 +269,6 @@
             "examples": [
               "250000000"
             ]
-          },
-          "feeBps": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Fee in basis points to be charged by the Market Maker",
-            "examples": [
-              "1",
-              "20"
-            ],
-            "maximum": 10000,
-            "minimum": 0
           },
           "protocol": {
             "$ref": "#/components/schemas/Protocol"
@@ -499,7 +477,7 @@
               "string",
               "null"
             ],
-            "description": "The transaction signature of the swap transaction (good to have but not strictly required)",
+            "deprecated": true,
             "examples": [
               "5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"
             ]
