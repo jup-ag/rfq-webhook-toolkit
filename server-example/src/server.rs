@@ -7,7 +7,6 @@
 ///
 ///
 use anyhow::Result;
-use once_cell::sync::Lazy;
 use order_engine_sdk::transaction::{
     deserialize_transaction_base64_into_transaction_details, TransactionDetails,
 };
@@ -18,7 +17,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use utoipauto::utoipauto;
 
-use std::{collections::HashMap, sync::Arc, time::Duration, vec};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use axum::{
     extract::{rejection::JsonRejection, Query, State},
