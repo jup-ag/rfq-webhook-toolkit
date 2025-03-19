@@ -3,7 +3,7 @@ members = ["server-example", "webhook-api", "programs/*", "order-engine-sdk"]
 resolver = "2"
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 
 [profile.release]
 overflow-checks = true
