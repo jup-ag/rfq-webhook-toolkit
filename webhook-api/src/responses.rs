@@ -45,7 +45,7 @@ pub struct SwapResponse {
     pub quote_id: String,
     #[schema(examples("accepted", "rejected"))]
     pub state: SwapState,
-    /// The transaction signature of the swap transaction (good to have but not strictly required)
+    /// The transaction signature of the swap transaction (can be provided but it is optional)
     #[schema(examples("5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tx_signature: Option<String>,
