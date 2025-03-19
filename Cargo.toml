@@ -3,13 +3,13 @@ members = ["server-example", "webhook-api", "programs/*", "order-engine-sdk"]
 resolver = "2"
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 
 [profile.release]
 overflow-checks = true
 
 [workspace.dependencies]
-anyhow = "1.0.95"
+anyhow = "1.0.97"
 anchor-lang = "0.30"
 anchor-spl = "0.30"
 async-std = { version = "1.13", features = ["attributes", "tokio1"] }
@@ -18,7 +18,7 @@ axum = "0.8.1"
 axum-extra = "0.10.0"
 base64 = "0.22.1"
 blake2 = "0.10.6"
-bytes = { version = "1.10.0", features = ["serde"] }
+bytes = { version = "1.10.1", features = ["serde"] }
 bincode = "1.3.3"
 clap = { version = "^4.5", features = ["cargo", "derive", "env"] }
 diesel_migrations = "2.2.0"
@@ -36,32 +36,32 @@ spl-token-client = "0.12.1"
 solana-rpc-client = "~2.0"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "^1.0"
-strum = { version = "0.26.3", features = ["derive"] }
+strum = { version = "0.27.1", features = ["derive"] }
 test-case = "3.3.1"
-tokio = "1.43.0"
+tokio = "1.44.1"
 tower = { version = "0.5.2" }
 tower-http = { version = "0.6.2" }
 tower-cookies = "0.11.0"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1.13.1", features = ["v4"] }
-chrono = { version = "0.4.39" }
-mockito = "1.6.1"
-bytemuck = "1.21.0"
+tracing-subscriber = { version = "^0.3", features = ["env-filter"] }
+uuid = { version = "1.16.0", features = ["v4"] }
+chrono = { version = "0.4.40" }
+mockito = "1.7.0"
+bytemuck = "1.22.0"
 uint = "0.10.0"
 url = "2.5.4"
 itertools = "0.14.0"
-once_cell = "1.20.2"
+once_cell = "1.21.1"
 num_cpus = "1.16"
-hex-literal = "0.4.1"
+hex-literal = "1.0.0"
 hex = "0.4.3"
-thiserror = "2.0.11"
+thiserror = "2.0.12"
 utoipa = { version = "5.3.1" }
 utoipa-swagger-ui = "9.0.0" # Optional for Swagger UI
 utoipa-axum = "0.2.0" # Optional for Axum
 metrics = { version = "0.24.1", default-features = false }
 metrics-exporter-prometheus = { version = "0.16.2", default-features = false }
-borsh = "1.5.5"
+borsh = "1.5.6"
 dashmap = "6.1.0"
 dotenvy = "0.15.7"
 validator = "0.20.0"

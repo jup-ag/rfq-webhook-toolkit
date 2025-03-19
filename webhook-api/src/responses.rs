@@ -45,7 +45,12 @@ pub struct SwapResponse {
     pub quote_id: String,
     #[schema(examples("accepted", "rejected"))]
     pub state: SwapState,
-    #[schema(examples("5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"), deprecated)]
+    #[schema(
+        examples(
+            "5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"
+        ),
+        deprecated
+    )]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tx_signature: Option<String>,
     /// Optional message to provide more context when the swap is rejected
