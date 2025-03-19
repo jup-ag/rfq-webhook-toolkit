@@ -8,10 +8,10 @@ use anchor_spl::{
     token_2022::spl_token_2022::{
         self,
         extension::{
-            transfer_fee::TransferFeeConfig, BaseStateWithExtensions, StateWithExtensions,
+            BaseStateWithExtensions, StateWithExtensions, transfer_fee::TransferFeeConfig,
         },
     },
-    token_interface::{self, spl_pod::primitives::PodU16, TokenAccount, TokenInterface},
+    token_interface::{self, TokenAccount, TokenInterface, spl_pod::primitives::PodU16},
 };
 
 use crate::error::OrderEngineError;

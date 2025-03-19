@@ -3,7 +3,7 @@ mod server;
 
 use config::get_app_config;
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[async_std::main]
 async fn main() {

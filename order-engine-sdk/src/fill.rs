@@ -1,7 +1,7 @@
 use crate::order_engine;
 use anchor_lang::{AnchorDeserialize, Discriminator};
 use anchor_spl::associated_token;
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use solana_sdk::{
     borsh1::try_from_slice_unchecked,
     compute_budget::{self, ComputeBudgetInstruction},
@@ -104,8 +104,19 @@ pub fn validate_fill_sanitized_message(
             );
 
             let pubkeys = accounts.into_iter().map(|a| *a.pubkey).collect::<Vec<_>>();
-            let [taker, maker, _taker_input_mint_token_account, _maker_input_mint_token_account, _taker_output_mint_token_account, _maker_output_mint_token_account, input_mint, _input_token_program, output_mint, _output_mint_token_program, ..] =
-                pubkeys.as_slice()
+            let [
+                taker,
+                maker,
+                _taker_input_mint_token_account,
+                _maker_input_mint_token_account,
+                _taker_output_mint_token_account,
+                _maker_output_mint_token_account,
+                input_mint,
+                _input_token_program,
+                output_mint,
+                _output_mint_token_program,
+                ..,
+            ] = pubkeys.as_slice()
             else {
                 bail!("Not enough accounts");
             };
