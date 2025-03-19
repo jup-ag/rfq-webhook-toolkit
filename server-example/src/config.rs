@@ -14,6 +14,15 @@ pub struct Config {
 
     #[clap(env, long, default_value = "https://api.mainnet-beta.solana.com")]
     pub rpc_url: String,
+
+    /// List of supported tokens, the tokens listed here will be advertised
+    /// to the RFQ system and will be used to forward quote requests to the maker
+    #[clap(env, long, default_values = &[
+        "So11111111111111111111111111111111111111112",
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+    ])]
+    pub supported_tokens: Vec<String>,
 }
 
 // Separating this so we can reuse it in tests
