@@ -3,11 +3,9 @@ import { assert } from 'chai';
 import { describe, expect, it } from 'vitest';
 import * as params from '../../params';
 import {loadKeypairFromFile} from '../../helpers';
-//import {accountInfoAssertion, getAssertAccountInfoInstruction, IntegerOperator} from 'lighthouse-sdk';
-import { KeyPairSigner, appendTransactionMessageInstruction, getBase64Decoder, getBase64Encoder, getCompiledTransactionMessageDecoder, getTransactionDecoder, getTransactionEncoder, partiallySignTransaction, pipe, signTransaction } from '@solana/kit';
+import { KeyPairSigner, appendTransactionMessageInstruction, compileTransaction, createTransactionMessage, decompileTransactionMessage, getBase64Decoder, getBase64Encoder, getCompiledTransactionMessageDecoder, getTransactionDecoder, getTransactionEncoder, partiallySignTransaction, pipe, signTransaction } from '@solana/kit';
 import {BN} from 'bn.js';
-
-// Start mock server before tests and close it after
+import { getAssertAccountInfoInstruction, accountInfoAssertion, IntegerOperator } from 'lighthouse-sdk';
 describe('Webhook e2e API Swap', {
   timeout: 10_000,
   // skip: true
@@ -154,10 +152,16 @@ describe('Webhook e2e API Swap', {
       const base64Transaction = quoteResponse.data.transaction;
       expect(base64Transaction).toBeDefined();
 
-      const transactionBytes = Buffer.from(base64Transaction, 'base64');
-      const transaction = VersionedTransaction.deserialize(transactionBytes);
-      transaction.sign([keypair]);
-      const signedTransactionBase64 = Buffer.from(transaction.serialize()).toString('base64');
+      const transactionBytes = getBase64Encoder().encode(base64Transaction);
+      const transaction = getTransactionDecoder().decode(transactionBytes);
+  
+      const signedTransaction = await pipe(
+        transaction,
+        (tx) => partiallySignTransaction([keypair.keyPair], tx),
+      );
+
+      const signedTransactionBytes = getTransactionEncoder().encode(signedTransaction);
+      const signedTransactionBase64 = getBase64Decoder().decode(signedTransactionBytes);
 
       // Step 3: Send the swap transaction
       const swapURL = `${params.QUOTE_SERVICE_URL}/swap`;
@@ -196,7 +200,7 @@ describe('Webhook e2e API Swap', {
   });
 
 
-  it('should execute a successful swap (ExactIn) with Lighthouse instructions', {skip: true}, async () => {
+  it('should execute a successful swap (ExactIn) with Lighthouse instructions', {skip: false}, async () => {
 
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
     assert(params.TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
@@ -251,16 +255,22 @@ describe('Webhook e2e API Swap', {
       const base64Transaction = quoteResponse.data.transaction;
       expect(base64Transaction).toBeDefined();
 
+      let tx = createTransactionMessage({version: 0});
+
       const transactionBytes = getBase64Encoder().encode(base64Transaction);
       const transaction = getTransactionDecoder().decode(transactionBytes);
-      
-      const signedTransaction = await pipe(
-        transaction,
-        (tx) => appendTransactionMessageInstruction([ix], tx),
-        (tx) => signTransaction([keypair.keyPair], tx),
-      );
-      const signedTransactionBase64 = getBase64Encoder().encode(signedTransaction);
+      const compiledTransactionMessage = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
 
+      const signedTransaction = await pipe(
+        compiledTransactionMessage,
+        (tx) => decompileTransactionMessage(tx),
+        (tx) => appendTransactionMessageInstruction(ix, tx),
+        (tx) => compileTransaction(tx),
+        (tx) => partiallySignTransaction([keypair.keyPair], tx),
+      );
+
+      const signedTransactionBytes = getTransactionEncoder().encode(signedTransaction);
+      const signedTransactionBase64 = getBase64Decoder().decode(signedTransactionBytes);
 
       // Step 3: Send the swap transaction
       const swapURL = `${params.QUOTE_SERVICE_URL}/swap`;
