@@ -1,8 +1,14 @@
 .PHONY: run-server-example
 
 run-example-server:
-	cargo run --package server-example
-
+	@echo "Running RFQ API..."
+	@if [ ! -f .env ]; then \
+		echo "No .env file found. Running with defaults."; \
+		cargo run --package server-example; \
+	else \
+		echo "Loading config from .env"; \
+		bash -c 'set -a; . ./.env; set +a; cargo run --package server-example'; \
+	fi
 
 prepare-tests:
 	cd tests && pnpm install

@@ -11,7 +11,10 @@ use order_engine_sdk::transaction::{
     deserialize_transaction_base64_into_transaction_details, TransactionDetails,
 };
 use solana_rpc_client::rpc_client::SerializableTransaction;
-use solana_sdk::{signature::Keypair, signer::Signer};
+use solana_sdk::{
+    signature::Keypair,
+    signer::{EncodableKey, Signer},
+};
 use thiserror::Error;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -351,10 +354,7 @@ pub async fn serve(config: Config) {
     let keypair = match &config.maker_keypair {
         Some(private_key_file) => {
             tracing::info!("loading keypair from file: {}", private_key_file);
-            Keypair::from_base58_string(
-                &std::fs::read_to_string(private_key_file)
-                    .expect("Failed to parse keypair from file"),
-            )
+            Keypair::read_from_file(private_key_file).expect("Invalid keypair file")
         }
         None => {
             tracing::info!("Loaded keypair from file");

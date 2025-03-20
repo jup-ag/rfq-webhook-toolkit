@@ -2,10 +2,8 @@ import axios from 'axios';
 import { assert } from 'chai';
 import { describe, expect, it } from 'vitest';
 import * as params from '../../params';
-const BN = require('bn.js');
-const solanaWeb3 = require('@solana/web3.js');
-const fs = require('fs');
-
+import {loadKeypairFromFile} from '../../helpers';
+import {BN} from 'bn.js';
 
 // Start mock server before tests and close it after
 describe('Webhook e2e API Quote', () => {
@@ -17,8 +15,8 @@ describe('Webhook e2e API Quote', () => {
     console.log(`how many ${params.MINT_A} will you get for ${params.AMOUNT} of ${params.MINT_B}?`);
 
     // Read the keypair
-    const keypair = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(params.TAKER_KEYPAIR, 'utf8'))));
-    const taker = keypair.publicKey.toString();
+    const keypair = await loadKeypairFromFile(params.TAKER_KEYPAIR);
+    const taker = keypair.address;
     console.log('taker address: ', taker);
 
     const url = `${params.QUOTE_SERVICE_URL}/quote`;
@@ -71,8 +69,8 @@ describe('Webhook e2e API Quote', () => {
     console.log(`how many ${params.MINT_A} do you need to get ${params.AMOUNT} of ${params.MINT_B}?`);
 
     // Read the keypair
-    const keypair = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(params.TAKER_KEYPAIR, 'utf8'))));
-    const taker = keypair.publicKey.toString();
+    const keypair = await loadKeypairFromFile(params.TAKER_KEYPAIR);
+    const taker = keypair.address;
     console.log('taker address: ', taker);
 
     const url = `${params.QUOTE_SERVICE_URL}/quote`;
