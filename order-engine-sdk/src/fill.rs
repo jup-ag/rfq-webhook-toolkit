@@ -161,7 +161,7 @@ pub fn validate_similar_fill_sanitized_message(
     sanitized_message: SanitizedMessage,
     original_sanitized_message: SanitizedMessage,
 ) -> Result<ValidatedSimilarFill> {
-    let message_header = original_sanitized_message.header();
+    let message_header = sanitized_message.header();
     let original_message_header = original_sanitized_message.header();
 
     ensure!(
@@ -304,7 +304,7 @@ pub fn validate_similar_fill_sanitized_message(
         );
 
         ensure!(
-            data.get(0)
+            data.first()
                 .map(|discriminator| ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(discriminator))
                 .unwrap_or(false),
             "Invalid Lighthouse instruction discriminator at index {real_index}"
@@ -412,6 +412,36 @@ mod tests {
                 original_sanitized_message.clone()
             )
             .unwrap()
+        );
+
+        // Different number of required signatures
+        let different_signature_fill_ix = Instruction {
+            program_id: order_engine::ID,
+            accounts: vec![AccountMeta {
+                pubkey: taker,
+                is_signer: false,
+                is_writable: false,
+            }],
+            data: order_engine::client::args::Fill {
+                input_amount,
+                output_amount: 200,
+                expire_at,
+            }
+            .data(),
+        };
+        let sanitized_message = make_sanitized_transaction(
+            &maker,
+            &[different_signature_fill_ix.clone()],
+            Hash::new_unique(),
+        );
+        assert_eq!(
+            "Number of required signatures did not match",
+            validate_similar_fill_sanitized_message(
+                sanitized_message,
+                original_sanitized_message.clone()
+            )
+            .unwrap_err()
+            .to_string()
         );
 
         // Change accounts
