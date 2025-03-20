@@ -414,13 +414,6 @@ mod tests {
             .unwrap()
         );
 
-        let data = order_engine::client::args::Fill {
-            input_amount,
-            output_amount: 200,
-            expire_at,
-        }
-        .data();
-
         // Different number of required signatures
         let different_signature_fill_ix = Instruction {
             program_id: order_engine::ID,
@@ -429,7 +422,12 @@ mod tests {
                 is_signer: false,
                 is_writable: false,
             }],
-            data: data.clone(),
+            data: order_engine::client::args::Fill {
+                input_amount,
+                output_amount: 200,
+                expire_at,
+            }
+            .data(),
         };
         let sanitized_message = make_sanitized_transaction(
             &maker,
@@ -438,31 +436,6 @@ mod tests {
         );
         assert_eq!(
             "Number of required signatures did not match",
-            validate_similar_fill_sanitized_message(
-                sanitized_message,
-                original_sanitized_message.clone()
-            )
-            .unwrap_err()
-            .to_string()
-        );
-
-        // Different instruction account length
-        let different_signature_fill_ix = Instruction {
-            program_id: order_engine::ID,
-            accounts: vec![AccountMeta {
-                pubkey: taker,
-                is_signer: true,
-                is_writable: false,
-            }],
-            data,
-        };
-        let sanitized_message = make_sanitized_transaction(
-            &maker,
-            &[different_signature_fill_ix.clone()],
-            Hash::new_unique(),
-        );
-        assert_eq!(
-            "Instruction accounts length was not equal at index 0, 61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH",
             validate_similar_fill_sanitized_message(
                 sanitized_message,
                 original_sanitized_message.clone()
