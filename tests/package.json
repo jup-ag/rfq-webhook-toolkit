@@ -16,7 +16,8 @@
     "integration": "vitest run ./suites/integration"
   },
   "dependencies": {
+    "@solana/kit": "^2.1.0",
     "bn.js": "^5.2.1",
-    "solana": "^3.0.0"
+    "lighthouse-sdk": "^2.0.1"
   }
 }
