@@ -161,7 +161,7 @@ pub fn validate_similar_fill_sanitized_message(
     sanitized_message: SanitizedMessage,
     original_sanitized_message: SanitizedMessage,
 ) -> Result<ValidatedSimilarFill> {
-    let message_header = original_sanitized_message.header();
+    let message_header = sanitized_message.header();
     let original_message_header = original_sanitized_message.header();
 
     ensure!(
@@ -304,7 +304,7 @@ pub fn validate_similar_fill_sanitized_message(
         );
 
         ensure!(
-            data.get(0)
+            data.first()
                 .map(|discriminator| ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(discriminator))
                 .unwrap_or(false),
             "Invalid Lighthouse instruction discriminator at index {real_index}"
