@@ -10,7 +10,7 @@ describe('Webhook e2e API Swap', {
   timeout: 10_000,
   // skip: true
 },() => {
-  it('should execute a successful swap (ExactIn)', {skip:false},async () => {
+  it('should execute a successful swap (ExactIn)', async () => {
 
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
     assert(params.TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
@@ -106,7 +106,7 @@ describe('Webhook e2e API Swap', {
   });
 
 
-  it('should execute a successful swap (ExactOut)', {skip:true}, async () => {
+  it('should execute a successful swap (ExactOut)', async () => {
 
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
     assert(params.TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
@@ -200,7 +200,7 @@ describe('Webhook e2e API Swap', {
   });
 
 
-  it('should execute a successful swap (ExactIn) with Lighthouse instructions', {skip: false}, async () => {
+  it('should execute a successful swap (ExactIn) with Lighthouse instructions', async () => {
 
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
     assert(params.TAKER_KEYPAIR, 'TAKER_KEYPAIR is not set');
@@ -242,14 +242,6 @@ describe('Webhook e2e API Swap', {
       expect(new BN(quoteResponse.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
       expect(quoteResponse.data.orderInfo.output.token).toBe(params.MINT_A);
       
-      // Add Lighthouse instructions
-      const ix = getAssertAccountInfoInstruction({
-        targetAccount: taker,
-        assertion: accountInfoAssertion('Lamports', {
-          value: 5_000_000,
-          operator: IntegerOperator.GreaterThan,
-        }),
-      });
 
       // Step 2: Transaction signing
       const base64Transaction = quoteResponse.data.transaction;
@@ -259,8 +251,20 @@ describe('Webhook e2e API Swap', {
 
       const transactionBytes = getBase64Encoder().encode(base64Transaction);
       const transaction = getTransactionDecoder().decode(transactionBytes);
-      const compiledTransactionMessage = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
+      const compiledTransactionMessage = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);        
 
+      // get the maker address
+      console.log('transaction signatures: ', transaction.signatures);
+      const maker = Object.keys(transaction.signatures).find((address) => address !== taker);
+      // Add Lighthouse instructions to make sure the maker has at least 5,000,000 lamports
+      const ix = getAssertAccountInfoInstruction({
+        targetAccount: maker,
+        assertion: accountInfoAssertion('Lamports', {
+          value: 5_000_000,
+          operator: IntegerOperator.GreaterThan,
+        }),
+      });
+      
       const signedTransaction = await pipe(
         compiledTransactionMessage,
         (tx) => decompileTransactionMessage(tx),
