@@ -183,6 +183,7 @@ pub fn validate_similar_fill_sanitized_message(
 
     let mut validated_similar_fill = None;
     let mut compute_unit_price = None;
+    let mut compute_unit_limit = None;
     for (
         index,
         (
@@ -222,10 +223,17 @@ pub fn validate_similar_fill_sanitized_message(
             "Instruction accounts did not match the original message {index}, {original_program_id}"
         );
         if original_program_id == &compute_budget::ID {
-            // Allow for compute unit price to change, since some wallets change it
+            // Allow for compute unit price and limit to change, since some wallets change it
             let compute_budget_ix = try_from_slice_unchecked::<ComputeBudgetInstruction>(data)?;
             match compute_budget_ix {
-                ComputeBudgetInstruction::SetComputeUnitLimit(_) => (),
+                ComputeBudgetInstruction::SetComputeUnitLimit(limit) => {
+                    ensure!(
+                        compute_unit_limit.is_none(),
+                        "Compute unit limit is already set"
+                    );
+                    compute_unit_limit = Some(limit);
+                    continue;
+                }
                 ComputeBudgetInstruction::SetComputeUnitPrice(price) => {
                     ensure!(
                         compute_unit_price.is_none(),
