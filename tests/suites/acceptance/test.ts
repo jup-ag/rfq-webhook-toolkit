@@ -2,9 +2,10 @@ import axios from 'axios';
 import { assert } from 'chai';
 import { describe, expect, it } from 'vitest';
 import * as params from '../../params';
-const BN = require('bn.js');
-const solanaWeb3 = require('@solana/web3.js');
-
+import {loadKeypairFromFile} from '../../helpers';
+import {BN} from 'bn.js';
+import { parse } from 'path';
+import { getPublicKeyFromAddress } from '@solana/kit';
 
 
 // Base API URL, load from environment variable or use default
@@ -13,10 +14,10 @@ const API_KEY = process.env.WEBHOOK_API_KEY || false; // api key
 const HEADERS = API_KEY ? { 'X-API-KEY': API_KEY } : {};
 
 // Helper function to validate Solana addresses
-function isValidSolanaAddress(address) {
+async function isValidSolanaAddress(address) {
   try {
     // Attempt to create a PublicKey, which validates the address format
-    new solanaWeb3.PublicKey(address);
+    await getPublicKeyFromAddress(address);
     return true;
   } catch (e) {
     return false;
