@@ -236,7 +236,7 @@ describe('Webhook API Quote', () => {
       expect(response.data.length).toBeGreaterThanOrEqual(0);
 
       for (let tokenAddress of response.data) {
-        expect(isValidSolanaAddress(tokenAddress)).toBe(true);
+        expect(isValidSolanaAddress(tokenAddress)).resolves.toBe(true);
       }
     }).catch((error) => {
       if(error.response) {
