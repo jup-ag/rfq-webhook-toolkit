@@ -106,7 +106,7 @@ Market Makers should return appropriate HTTP status codes along with error messa
 
 ##### Successful responses
 
-- `2oo OK`: The request was successful, and the webhook will return a quote.
+- `200 OK`: The request was successful, and the webhook will return a quote.
 - `404 Not Found`: The webhook will not return a quote for this request (e.g. the pair or the size are not supported)
 
 ##### Error responses
