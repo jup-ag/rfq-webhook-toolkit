@@ -17,9 +17,9 @@ pub struct Config {
 
     /// List of supported tokens, the tokens listed here will be advertised
     /// to the RFQ system and will be used to forward quote requests to the maker
-    #[clap(env, long, 
+    #[clap(env, long,
         use_value_delimiter = true,
-        value_delimiter = ',', 
+        value_delimiter = ',',
         default_values = &[
         "So11111111111111111111111111111111111111112",
         "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
