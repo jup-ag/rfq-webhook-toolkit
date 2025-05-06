@@ -46,14 +46,12 @@ describe('Webhook e2e API Quote', () => {
         expect(response.data).toHaveProperty('quoteId');
         expect(response.data).toHaveProperty('requestId');
         expect(response.data).toHaveProperty('expireAt');
-        expect(response.data).toHaveProperty('orderInfo');
         expect(response.data).toHaveProperty('maker');
-        expect(response.data).toHaveProperty('orderInfo');
         expect(response.data.swapMode).toBe(payload.swapMode);
-        expect(response.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
-        expect(response.data.orderInfo.input.token).toBe(params.MINT_B);
-        expect(new BN(response.data.orderInfo.output.endAmount).gt(new BN(0))).toBe(true);
-        expect(response.data.orderInfo.output.token).toBe(params.MINT_A);
+        expect(response.data.inAmount).toBe(`${params.AMOUNT}`);
+        expect(response.data.inputMint).toBe(params.MINT_B);
+        expect(new BN(response.data.outAmount).gt(new BN(0))).toBe(true);
+        expect(response.data.outputMint).toBe(params.MINT_A);
       })
       .catch((error) => {
         if (error.response) {
@@ -108,14 +106,12 @@ describe('Webhook e2e API Quote', () => {
         expect(response.data).toHaveProperty('quoteId');
         expect(response.data).toHaveProperty('requestId');
         expect(response.data).toHaveProperty('expireAt');
-        expect(response.data).toHaveProperty('orderInfo');
         expect(response.data).toHaveProperty('maker');
-        expect(response.data).toHaveProperty('orderInfo');
         expect(response.data.swapMode).toBe(payload.swapMode);
-        expect(new BN(response.data.orderInfo.input.endAmount).gt(new BN(0))).toBe(true);
-        expect(response.data.orderInfo.input.token).toBe(params.MINT_A);
-        expect(response.data.orderInfo.output.endAmount).toBe(`${params.AMOUNT}`);
-        expect(response.data.orderInfo.output.token).toBe(params.MINT_B);
+        expect(new BN(response.data.inAmount).gt(new BN(0))).toBe(true);
+        expect(response.data.inputMint).toBe(params.MINT_A);
+        expect(response.data.outAmount).toBe(`${params.AMOUNT}`);
+        expect(response.data.outputMint).toBe(params.MINT_B);
       })
       .catch((error) => {
         if (error.response) {
@@ -164,13 +160,11 @@ describe('Webhook e2e API Quote', () => {
         expect(response.data).toHaveProperty('quoteId');
         expect(response.data).toHaveProperty('requestId');
         expect(response.data).toHaveProperty('expireAt');
-        expect(response.data).toHaveProperty('orderInfo');
         expect(response.data).toHaveProperty('maker'); // the maker should be the MM address
-        expect(response.data).toHaveProperty('orderInfo');
-        expect(response.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
-        expect(response.data.orderInfo.input.token).toBe(params.MINT_B);
-        expect(new BN(response.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
-        expect(response.data.orderInfo.output.token).toBe(params.MINT_A);
+        expect(response.data.inAmount).toBe(`${params.AMOUNT}`);
+        expect(response.data.inputMint).toBe(params.MINT_B);
+        expect(new BN(response.data.outAmount).gt(new BN(0))).toBe(true);
+        expect(response.data.outputMint).toBe(params.MINT_A);
       })
       .catch((error) => {
         if (error.response) {

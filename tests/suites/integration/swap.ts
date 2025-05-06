@@ -6,6 +6,7 @@ import { loadKeypairFromFile } from '../../helpers';
 import { KeyPairSigner, appendTransactionMessageInstruction, compileTransaction, createTransactionMessage, decompileTransactionMessage, getBase64Decoder, getBase64Encoder, getCompiledTransactionMessageDecoder, getTransactionDecoder, getTransactionEncoder, partiallySignTransaction, pipe, signTransaction } from '@solana/kit';
 import { BN } from 'bn.js';
 import { getAssertAccountInfoInstruction, accountInfoAssertion, IntegerOperator } from 'lighthouse-sdk';
+import test from 'node:test';
 describe('Webhook e2e API Swap', {
   timeout: 10_000,
   // skip: true
@@ -54,12 +55,11 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.data).toHaveProperty('quoteId');
       expect(quoteResponse.data).toHaveProperty('requestId');
       expect(quoteResponse.data).toHaveProperty('expireAt');
-      expect(quoteResponse.data).toHaveProperty('orderInfo');
       expect(quoteResponse.data).toHaveProperty('maker');
-      expect(quoteResponse.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
-      expect(quoteResponse.data.orderInfo.input.token).toBe(params.MINT_B);
-      expect(new BN(quoteResponse.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
-      expect(quoteResponse.data.orderInfo.output.token).toBe(params.MINT_A);
+      expect(quoteResponse.data.inAmount).toBe(`${params.AMOUNT}`);
+      expect(quoteResponse.data.inputMint).toBe(params.MINT_B);
+      expect(new BN(quoteResponse.data.outAmount).gt(new BN(0))).toBe(true);
+      expect(quoteResponse.data.outputMint).toBe(params.MINT_A);
 
 
       // Step 2: Transaction signing
@@ -155,12 +155,11 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.data).toHaveProperty('quoteId');
       expect(quoteResponse.data).toHaveProperty('requestId');
       expect(quoteResponse.data).toHaveProperty('expireAt');
-      expect(quoteResponse.data).toHaveProperty('orderInfo');
       expect(quoteResponse.data).toHaveProperty('maker');
-      expect(quoteResponse.data.orderInfo.output.startAmount).toBe(`${params.AMOUNT}`);
-      expect(quoteResponse.data.orderInfo.output.token).toBe(params.MINT_B);
-      expect(new BN(quoteResponse.data.orderInfo.input.startAmount).gt(new BN(0))).toBe(true);
-      expect(quoteResponse.data.orderInfo.input.token).toBe(params.MINT_A);
+      expect(quoteResponse.data.outAmount).toBe(`${params.AMOUNT}`);
+      expect(quoteResponse.data.outputMint).toBe(params.MINT_B);
+      expect(new BN(quoteResponse.data.inAmount).gt(new BN(0))).toBe(true);
+      expect(quoteResponse.data.inputMint).toBe(params.MINT_A);
 
       // Step 2: Transaction signing
       const base64Transaction = quoteResponse.data.transaction;
@@ -254,12 +253,11 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.data).toHaveProperty('quoteId');
       expect(quoteResponse.data).toHaveProperty('requestId');
       expect(quoteResponse.data).toHaveProperty('expireAt');
-      expect(quoteResponse.data).toHaveProperty('orderInfo');
       expect(quoteResponse.data).toHaveProperty('maker');
-      expect(quoteResponse.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
-      expect(quoteResponse.data.orderInfo.input.token).toBe(params.MINT_B);
-      expect(new BN(quoteResponse.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
-      expect(quoteResponse.data.orderInfo.output.token).toBe(params.MINT_A);
+      expect(quoteResponse.data.inAmount).toBe(`${params.AMOUNT}`);
+      expect(quoteResponse.data.inputMint).toBe(params.MINT_B);
+      expect(new BN(quoteResponse.data.outAmount).gt(new BN(0))).toBe(true);
+      expect(quoteResponse.data.outputMint).toBe(params.MINT_A);
 
 
       // Step 2: Transaction signing
