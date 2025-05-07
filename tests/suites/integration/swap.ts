@@ -190,7 +190,7 @@ describe('Webhook e2e API Swap', {
 
       // Assertions for the swap response
       expect(swapResponse.status).toBe(200);
-      expect(swapResponse.data.state).toBe("accepted");
+      expect(swapResponse.data.state).toBe("Success");
 
     } catch (error) {
       if (error.response) {
@@ -307,7 +307,7 @@ describe('Webhook e2e API Swap', {
 
       // Assertions for the swap response
       expect(swapResponse.status).toBe(200);
-      expect(swapResponse.data.state).toBe("accepted");
+      expect(swapResponse.data.state).toBe("Success");
 
     } catch (error) {
       if (error.response) {
