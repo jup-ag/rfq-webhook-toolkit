@@ -78,12 +78,75 @@ pnpm run integration
 
 ### Manual tests
 
-To test a webhook via the [edge UI](https://edge.jup.ag) with you can use a browser extension ([example](https://chromewebstore.google.com/search/Inssman)) that allows to modify http request params, adding the rules:
+To test a webhook live on EDGE, you can use a tool such as [Postman](https://www.postman.com/) or `curl`. See the following examples:
 
-- host: `https://quote-proxy-edge.raccoons.dev/*`
-- param: `webhookID=<your_webhook_id>`
+**Do not forget to replace TAKER_PUBLIC_ADDRESS and YOUR_WEBHOOK_ID in the url**
 
+<details> <summary><strong>cURL</strong></summary>
 
+```bash
+curl --location 'https://rfq-api-edge.raccoons.dev/v1/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=So11111111111111111111111111111111111111112&amount=1000000&taker=<TAKER_PUBLIC_ADDRESS>&quoteType=exactIn&version=v1&webhookId=<YOUR_WEBHOOK_ID>&swapType=rfq' --header 'Content-Type: application/json'
+```
+</details> <details> <summary><strong>Rust</strong></summary>
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::builder()
+        .build()?;
+
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert("Content-Type", "application/json".parse()?);
+
+    let data = "";
+
+    let request = client.request(reqwest::Method::GET, "https://rfq-api-edge.raccoons.dev/v1/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=So11111111111111111111111111111111111111112&amount=1000000&taker=TAKER_PUBLIC_KEY&quoteType=exactIn&version=v1&webhookId=YOUR_WEBHOOK_ID&swapType=rfq")
+        .headers(headers)
+        .body(data);
+
+    let response = request.send().await?;
+    let body = response.text().await?;
+
+    println!("{}", body);
+
+    Ok(())
+}
+```
+</details> <details> <summary><strong>Python</strong></summary>
+
+```python
+import requests
+import json
+
+url = "https://rfq-api-edge.raccoons.dev/v1/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=So11111111111111111111111111111111111111112&amount=1000000&taker=TAKER_PUBLIC_KEY&quoteType=exactIn&version=v1&webhookId=YOUR_WEBHOOK_ID&swapType=rfq"
+
+payload = ""
+headers = {
+  'Content-Type': 'application/json'
+}
+
+response = requests.request("GET", url, headers=headers, data=payload)
+
+print(response.text)
+```
+</details> <details> <summary><strong>TypeScript</strong></summary>
+
+```typescript
+var request = require('request');
+var options = {
+  'method': 'GET',
+  'url': 'https://rfq-api-edge.raccoons.dev/v1/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=So11111111111111111111111111111111111111112&amount=1000000&taker=TAKER_PUBLIC_KEY&quoteType=exactIn&version=v1&webhookId=YOUR_WEBHOOK_ID&swapType=rfq',
+  'headers': {
+    'Content-Type': 'application/json'
+  }
+};
+request(options, function (error, response) {
+  if (error) throw new Error(error);
+  console.log(response.body);
+});
+```
+
+</details>
 
 ## Troubleshooting
 
@@ -102,7 +165,3 @@ Regarding point **#3**, the Maker is required to have the **ATA configured** for
 
 #### The webhook returns the best quote, but it is not the one presented to the user
 See the section ["The webhook provides a quote, but the RFQ returns a 404"](#the-webhook-provides-a-quote-but-the-rfq-returns-404).  
- 
- 
-
-
