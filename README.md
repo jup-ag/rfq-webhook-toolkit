@@ -95,7 +95,7 @@ REST API  documentation is provided in OpenAPI format. You can find the document
 A sample server with the API documentation is provider in the [`server-example`](./server-example/) directory. To launch the server, run the following commands (requires rust and cargo to be installed):
 
 ```bash
-make run-server-example
+make run-example-server
 ```
 
 and open the following URL in your browser: [http://localhost:8080/swagger-ui/](http://localhost:8080/swagger-ui/)
