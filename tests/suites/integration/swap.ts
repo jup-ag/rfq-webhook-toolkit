@@ -2,14 +2,15 @@ import axios from 'axios';
 import { assert } from 'chai';
 import { describe, expect, it } from 'vitest';
 import * as params from '../../params';
-import {loadKeypairFromFile} from '../../helpers';
+import { loadKeypairFromFile } from '../../helpers';
 import { KeyPairSigner, appendTransactionMessageInstruction, compileTransaction, createTransactionMessage, decompileTransactionMessage, getBase64Decoder, getBase64Encoder, getCompiledTransactionMessageDecoder, getTransactionDecoder, getTransactionEncoder, partiallySignTransaction, pipe, signTransaction } from '@solana/kit';
-import {BN} from 'bn.js';
+import { BN } from 'bn.js';
 import { getAssertAccountInfoInstruction, accountInfoAssertion, IntegerOperator } from 'lighthouse-sdk';
+import test from 'node:test';
 describe('Webhook e2e API Swap', {
   timeout: 10_000,
   // skip: true
-},() => {
+}, () => {
   it('should execute a successful swap (ExactIn)', async () => {
 
     assert(params.WEBHOOK_ID, 'WEBHOOK_ID is not set');
@@ -22,18 +23,27 @@ describe('Webhook e2e API Swap', {
     const taker = keypair.address;
     console.log('taker address: ', taker);
 
-    const quoteURL = `${params.QUOTE_SERVICE_URL}/quote`;
+    const quoteURL = `${params.QUOTE_SERVICE_URL}/order`;
     console.log('request url: ', quoteURL);
 
     const quoteParams = {
-      swapMode: "exactIn",
-      taker: taker,
       inputMint: params.MINT_B,
       outputMint: params.MINT_A,
       amount: `${params.AMOUNT}`,
-      swapType: 'rfq',
+      mode: "manual",
+      swapMode: "ExactIn",
+      slippageBps: 50,
+      broadcastFeeType: "maxCap",
+      priorityFeeLamports: 1000000,
+      useWsol: false,
+      asLegacyTransaction: false,
+      excludeDexes: "",
+      excludeRouters: "metis%2Chashflow%2Cdflow",
+      taker: taker,
       webhookId: params.WEBHOOK_ID,
     }
+
+
 
     try {
       // Step 1: Fetch the quote
@@ -45,22 +55,21 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.data).toHaveProperty('quoteId');
       expect(quoteResponse.data).toHaveProperty('requestId');
       expect(quoteResponse.data).toHaveProperty('expireAt');
-      expect(quoteResponse.data).toHaveProperty('orderInfo');
       expect(quoteResponse.data).toHaveProperty('maker');
-      expect(quoteResponse.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
-      expect(quoteResponse.data.orderInfo.input.token).toBe(params.MINT_B);
-      expect(new BN(quoteResponse.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
-      expect(quoteResponse.data.orderInfo.output.token).toBe(params.MINT_A);
-     
-     
+      expect(quoteResponse.data.inAmount).toBe(`${params.AMOUNT}`);
+      expect(quoteResponse.data.inputMint).toBe(params.MINT_B);
+      expect(new BN(quoteResponse.data.outAmount).gt(new BN(0))).toBe(true);
+      expect(quoteResponse.data.outputMint).toBe(params.MINT_A);
+
+
       // Step 2: Transaction signing
       const base64Transaction = quoteResponse.data.transaction;
       expect(base64Transaction).toBeDefined();
 
       const transactionBytes = getBase64Encoder().encode(base64Transaction);
       const transaction = getTransactionDecoder().decode(transactionBytes);
-      
-      
+
+
       const signedTransaction = await pipe(
         transaction,
         (tx) => partiallySignTransaction([keypair.keyPair], tx),
@@ -68,13 +77,12 @@ describe('Webhook e2e API Swap', {
 
       const signedTransactionBytes = getTransactionEncoder().encode(signedTransaction);
       const signedTransactionBase64 = getBase64Decoder().decode(signedTransactionBytes);
-      
+
       // Step 3: Send the swap transaction
-      const swapURL = `${params.QUOTE_SERVICE_URL}/swap`;
+      const swapURL = `${params.QUOTE_SERVICE_URL}/execute`;
       const swapPayload = {
-        quoteId: quoteResponse.data.quoteId,
         requestId: quoteResponse.data.requestId,
-        transaction: signedTransactionBase64,
+        signedTransaction: signedTransactionBase64,
       };
       const swapParams = { swapType: 'rfq' };
       console.log("Swap payload --> ", swapPayload);
@@ -84,7 +92,6 @@ describe('Webhook e2e API Swap', {
 
       // Assertions for the swap response
       expect(swapResponse.status).toBe(200);
-      expect(swapResponse.data.quoteId).toBe(swapPayload.quoteId);
       expect(swapResponse.data.state).toBe("accepted");
 
     } catch (error) {
@@ -118,16 +125,23 @@ describe('Webhook e2e API Swap', {
     const taker = keypair.address;
     console.log('taker address: ', taker);
 
-    const quoteURL = `${params.QUOTE_SERVICE_URL}/quote`;
+    const quoteURL = `${params.QUOTE_SERVICE_URL}/order`;
     console.log('request url: ', quoteURL);
 
     const quoteParams = {
-      swapMode: "exactOut",
-      taker: taker,
       inputMint: params.MINT_A,
       outputMint: params.MINT_B,
       amount: `${params.AMOUNT}`,
-      swapType: 'rfq',
+      mode: "manual",
+      swapMode: "ExactOut",
+      slippageBps: 50,
+      broadcastFeeType: "maxCap",
+      priorityFeeLamports: 1000000,
+      useWsol: false,
+      asLegacyTransaction: false,
+      excludeDexes: "",
+      excludeRouters: "metis%2Chashflow%2Cdflow",
+      taker: taker,
       webhookId: params.WEBHOOK_ID,
     }
 
@@ -141,12 +155,11 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.data).toHaveProperty('quoteId');
       expect(quoteResponse.data).toHaveProperty('requestId');
       expect(quoteResponse.data).toHaveProperty('expireAt');
-      expect(quoteResponse.data).toHaveProperty('orderInfo');
       expect(quoteResponse.data).toHaveProperty('maker');
-      expect(quoteResponse.data.orderInfo.output.startAmount).toBe(`${params.AMOUNT}`);
-      expect(quoteResponse.data.orderInfo.output.token).toBe(params.MINT_B);
-      expect(new BN(quoteResponse.data.orderInfo.input.startAmount).gt(new BN(0))).toBe(true);
-      expect(quoteResponse.data.orderInfo.input.token).toBe(params.MINT_A);
+      expect(quoteResponse.data.outAmount).toBe(`${params.AMOUNT}`);
+      expect(quoteResponse.data.outputMint).toBe(params.MINT_B);
+      expect(new BN(quoteResponse.data.inAmount).gt(new BN(0))).toBe(true);
+      expect(quoteResponse.data.inputMint).toBe(params.MINT_A);
 
       // Step 2: Transaction signing
       const base64Transaction = quoteResponse.data.transaction;
@@ -154,7 +167,7 @@ describe('Webhook e2e API Swap', {
 
       const transactionBytes = getBase64Encoder().encode(base64Transaction);
       const transaction = getTransactionDecoder().decode(transactionBytes);
-  
+
       const signedTransaction = await pipe(
         transaction,
         (tx) => partiallySignTransaction([keypair.keyPair], tx),
@@ -164,11 +177,10 @@ describe('Webhook e2e API Swap', {
       const signedTransactionBase64 = getBase64Decoder().decode(signedTransactionBytes);
 
       // Step 3: Send the swap transaction
-      const swapURL = `${params.QUOTE_SERVICE_URL}/swap`;
+      const swapURL = `${params.QUOTE_SERVICE_URL}/execute`;
       const swapPayload = {
-        quoteId: quoteResponse.data.quoteId,
         requestId: quoteResponse.data.requestId,
-        transaction: signedTransactionBase64,
+        signedTransaction: signedTransactionBase64,
       };
       const swapParams = { swapType: 'rfq' };
       console.log("Swap payload --> ", swapPayload);
@@ -178,8 +190,7 @@ describe('Webhook e2e API Swap', {
 
       // Assertions for the swap response
       expect(swapResponse.status).toBe(200);
-      expect(swapResponse.data.quoteId).toBe(swapPayload.quoteId);
-      expect(swapResponse.data.state).toBe("accepted");
+      expect(swapResponse.data.state).toBe("Success");
 
     } catch (error) {
       if (error.response) {
@@ -212,16 +223,23 @@ describe('Webhook e2e API Swap', {
     const taker = keypair.address;
     console.log('taker address: ', taker);
 
-    const quoteURL = `${params.QUOTE_SERVICE_URL}/quote`;
+    const quoteURL = `${params.QUOTE_SERVICE_URL}/order`;
     console.log('request url: ', quoteURL);
 
     const quoteParams = {
-      swapMode: "exactIn",
-      taker: taker,
       inputMint: params.MINT_B,
       outputMint: params.MINT_A,
       amount: `${params.AMOUNT}`,
-      swapType: 'rfq',
+      mode: "manual",
+      swapMode: "ExactIn",
+      slippageBps: 50,
+      broadcastFeeType: "maxCap",
+      priorityFeeLamports: 1000000,
+      useWsol: false,
+      asLegacyTransaction: false,
+      excludeDexes: "",
+      excludeRouters: "metis%2Chashflow%2Cdflow",
+      taker: taker,
       webhookId: params.WEBHOOK_ID,
     }
 
@@ -235,23 +253,22 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.data).toHaveProperty('quoteId');
       expect(quoteResponse.data).toHaveProperty('requestId');
       expect(quoteResponse.data).toHaveProperty('expireAt');
-      expect(quoteResponse.data).toHaveProperty('orderInfo');
       expect(quoteResponse.data).toHaveProperty('maker');
-      expect(quoteResponse.data.orderInfo.input.startAmount).toBe(`${params.AMOUNT}`);
-      expect(quoteResponse.data.orderInfo.input.token).toBe(params.MINT_B);
-      expect(new BN(quoteResponse.data.orderInfo.output.startAmount).gt(new BN(0))).toBe(true);
-      expect(quoteResponse.data.orderInfo.output.token).toBe(params.MINT_A);
-      
+      expect(quoteResponse.data.inAmount).toBe(`${params.AMOUNT}`);
+      expect(quoteResponse.data.inputMint).toBe(params.MINT_B);
+      expect(new BN(quoteResponse.data.outAmount).gt(new BN(0))).toBe(true);
+      expect(quoteResponse.data.outputMint).toBe(params.MINT_A);
+
 
       // Step 2: Transaction signing
       const base64Transaction = quoteResponse.data.transaction;
       expect(base64Transaction).toBeDefined();
 
-      let tx = createTransactionMessage({version: 0});
+      let tx = createTransactionMessage({ version: 0 });
 
       const transactionBytes = getBase64Encoder().encode(base64Transaction);
       const transaction = getTransactionDecoder().decode(transactionBytes);
-      const compiledTransactionMessage = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);        
+      const compiledTransactionMessage = getCompiledTransactionMessageDecoder().decode(transaction.messageBytes);
 
       // get the maker address
       console.log('transaction signatures: ', transaction.signatures);
@@ -264,7 +281,7 @@ describe('Webhook e2e API Swap', {
           operator: IntegerOperator.GreaterThan,
         }),
       });
-      
+
       const signedTransaction = await pipe(
         compiledTransactionMessage,
         (tx) => decompileTransactionMessage(tx),
@@ -277,11 +294,10 @@ describe('Webhook e2e API Swap', {
       const signedTransactionBase64 = getBase64Decoder().decode(signedTransactionBytes);
 
       // Step 3: Send the swap transaction
-      const swapURL = `${params.QUOTE_SERVICE_URL}/swap`;
+      const swapURL = `${params.QUOTE_SERVICE_URL}/execute`;
       const swapPayload = {
-        quoteId: quoteResponse.data.quoteId,
         requestId: quoteResponse.data.requestId,
-        transaction: signedTransactionBase64,
+        signedTransaction: signedTransactionBase64,
       };
       const swapParams = { swapType: 'rfq' };
       console.log("Swap payload --> ", swapPayload);
@@ -291,8 +307,7 @@ describe('Webhook e2e API Swap', {
 
       // Assertions for the swap response
       expect(swapResponse.status).toBe(200);
-      expect(swapResponse.data.quoteId).toBe(swapPayload.quoteId);
-      expect(swapResponse.data.state).toBe("accepted");
+      expect(swapResponse.data.state).toBe("Success");
 
     } catch (error) {
       if (error.response) {
