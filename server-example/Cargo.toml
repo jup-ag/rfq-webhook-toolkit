@@ -9,10 +9,8 @@ async-std = { workspace = true, features = ["attributes", "tokio1"] }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 bytes = { workspace = true, features = ["serde"] }
-chrono = { workspace = true, features = ["now"] }
 clap = { workspace = true, features = ["cargo", "derive", "env"] }
 futures = { workspace = true }
-reqwest = { workspace = true, features = ["native-tls-vendored", "json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -36,5 +34,4 @@ utoipa-axum = { workspace = true, features = ["debug"] }
 solana-sdk = { workspace = true }
 dotenvy = { workspace = true }
 utoipauto = { workspace = true }
-once_cell = { workspace = true }
 solana-rpc-client = { workspace = true }

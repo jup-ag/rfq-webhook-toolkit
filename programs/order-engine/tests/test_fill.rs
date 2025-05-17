@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use agave_feature_set::bpf_account_data_direct_mapping;
 use anchor_lang::{
     prelude::*,
     solana_program::{self, instruction::Instruction},
@@ -13,9 +14,8 @@ use solana_program_test::{
     BanksClient, BanksClientError, ProgramTest,
 };
 use solana_sdk::{
-    feature_set::bpf_account_data_direct_mapping, native_token::LAMPORTS_PER_SOL,
-    signature::Keypair, signer::Signer, system_instruction, transaction::Transaction,
-    transaction::TransactionError,
+    native_token::LAMPORTS_PER_SOL, signature::Keypair, signer::Signer, system_instruction,
+    transaction::Transaction, transaction::TransactionError,
 };
 use spl_token_client::{
     client::{

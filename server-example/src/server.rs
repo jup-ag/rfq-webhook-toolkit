@@ -367,7 +367,7 @@ pub async fn serve(config: Config) {
     // create the shared state
     let app_state = Arc::new(AppState {
         config: config.clone(),
-        keypair: keypair,
+        keypair,
     });
 
     // build the axum router
