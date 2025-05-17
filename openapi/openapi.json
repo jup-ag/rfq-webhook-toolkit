@@ -306,7 +306,7 @@
               "null"
             ],
             "format": "int64",
-            "description": "If no taker is provided, the there will be no suggested fee\nThis is the suggested compute unit price in micro lamports to be set when building the transaction\nMMs will have the option to ignore our suggested fee and provide their own when responding to this quote",
+            "description": "If no taker is provided, there will be no suggested fee\nThis is the suggested compute unit price in micro lamports to be set when building the transaction\nMMs will have the option to ignore our suggested fee and provide their own when responding to this quote",
             "examples": [
               "10000"
             ],
@@ -333,6 +333,14 @@
             "examples": [
               "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
             ]
+          },
+          "useWrappedSol": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "The taker expects wrapped SOL when trading the WSOL mint as input or output mint",
+            "default": false
           }
         }
       },
