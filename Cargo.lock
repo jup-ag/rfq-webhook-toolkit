@@ -3392,7 +3392,6 @@ dependencies = [
  "itertools 0.14.0",
  "solana-program-test",
  "solana-sdk",
- "spl-token-2022 9.0.0",
  "spl-token-client",
  "test-case",
 ]
@@ -7902,9 +7901,9 @@ dependencies = [
 
 [[package]]
 name = "spl-token-client"
-version = "0.16.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c063f31347dec4286beec6e568c70059d27295c1b013711c26c84d52a60a1e7"
+checksum = "6fa99c4b50719e4bd0edc9575da7af2c326514cc2510e06f26946e2305269d71"
 dependencies = [
  "async-trait",
  "bincode",
