@@ -33,8 +33,10 @@ anchor-spl = { workspace = true, features = ["token_2022"] }
 [dev-dependencies]
 solana-sdk = { workspace = true }
 solana-program-test = { workspace = true }
+agave-feature-set = "~2"
 bincode = { workspace = true }
-spl-token-client = { workspace = true }
+spl-token-client = { workspace = true, default-features = false }
+spl-token-2022 = { version = "9.0.0", features = ["no-entrypoint"] }
 assert_matches = { workspace = true }
 itertools = { workspace = true }
 test-case = { workspace = true }
