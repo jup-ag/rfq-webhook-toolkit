@@ -9,7 +9,7 @@ use anchor_spl::{
         self,
         spl_token::{self, native_mint},
     },
-    token_interface::{self, spl_pod::primitives::PodU16, TokenAccount, TokenInterface},
+    token_interface::{spl_pod::primitives::PodU16, TokenAccount, TokenInterface},
 };
 use spl_token_2022::{
     self,
