@@ -1,4 +1,8 @@
-use anchor_lang::{prelude::*, solana_program::program_pack::Pack, system_program};
+use anchor_lang::{
+    prelude::*,
+    solana_program::{self, program_pack::Pack},
+    system_program,
+};
 use anchor_spl::{
     associated_token::spl_associated_token_account::tools::account::create_pda_account,
     token::{
@@ -9,10 +13,12 @@ use anchor_spl::{
 };
 use spl_token_2022::{
     self,
-    extension::{transfer_fee::TransferFeeConfig, BaseStateWithExtensions, StateWithExtensions},
+    extension::{
+        self, transfer_fee::TransferFeeConfig, BaseStateWithExtensions, StateWithExtensions,
+    },
 };
 
-use crate::error::OrderEngineError;
+use crate::{error::OrderEngineError, transfer_hook::WHITELISTED_TRANSFER_HOOK_MINTS};
 
 pub const TEMPORARY_WSOL_TOKEN_ACCOUNT: &[u8] = b"temporary-wsol-token-account";
 
@@ -84,6 +90,7 @@ pub fn handle_fill<'c: 'info, 'info>(
             ctx.accounts.taker.to_account_info(),
             ctx.accounts.input_mint.to_account_info(),
             input_amount,
+            &ctx.remaining_accounts,
         )?,
     }
 
@@ -147,6 +154,7 @@ pub fn handle_fill<'c: 'info, 'info>(
             ctx.accounts.maker.to_account_info(),
             ctx.accounts.output_mint.to_account_info(),
             output_amount,
+            &ctx.remaining_accounts,
         )?,
     }
 
@@ -160,44 +168,19 @@ fn transfer<'info>(
     authority: AccountInfo<'info>,
     mint: AccountInfo<'info>,
     amount: u64,
+    remaining_accounts: &[AccountInfo<'info>],
 ) -> Result<()> {
-    let decimals_for_transfer_checked = if token_program.key.eq(&spl_token_2022::ID) {
-        let mint_data = mint.try_borrow_data()?;
-        let mint_state_with_extensions =
-            StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
-
-        if let Ok(transfer_fee_config) =
-            mint_state_with_extensions.get_extension::<TransferFeeConfig>()
-        {
-            require!(
-                transfer_fee_config
-                    .get_epoch_fee(Clock::get()?.epoch)
-                    .transfer_fee_basis_points
-                    == PodU16([0; 2]),
-                OrderEngineError::Token2022MintExtensionNotSupported
-            );
-        }
-
-        Some(mint_state_with_extensions.base.decimals)
-    } else {
-        None
-    };
-
-    match decimals_for_transfer_checked {
-        Some(decimals) => token_interface::transfer_checked(
-            CpiContext::new(
-                token_program,
-                token_interface::TransferChecked {
-                    from,
-                    mint,
-                    to,
-                    authority,
-                },
-            ),
+    match *token_program.key {
+        spl_token_2022::ID => transfer_token_2022(
+            token_program,
+            from,
+            to,
+            authority,
+            mint,
             amount,
-            decimals,
+            remaining_accounts,
         ),
-        None => token::transfer(
+        _ => token::transfer(
             CpiContext::new(
                 token_program,
                 token::Transfer {
@@ -209,6 +192,69 @@ fn transfer<'info>(
             amount,
         ),
     }
+}
+
+fn transfer_token_2022<'info>(
+    token_program: AccountInfo<'info>,
+    from: AccountInfo<'info>,
+    to: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    amount: u64,
+    remaining_accounts: &[AccountInfo<'info>],
+) -> Result<()> {
+    let mint_data = mint.try_borrow_data()?;
+    let mint_state_with_extensions =
+        StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+
+    // We only support 0 fee transfer token.
+    if let Ok(transfer_fee_config) = mint_state_with_extensions.get_extension::<TransferFeeConfig>()
+    {
+        require!(
+            transfer_fee_config
+                .get_epoch_fee(Clock::get()?.epoch)
+                .transfer_fee_basis_points
+                == PodU16([0; 2]),
+            OrderEngineError::Token2022MintExtensionNotSupported
+        );
+    }
+
+    let decimals = mint_state_with_extensions.base.decimals;
+    let hook_program_id = extension::transfer_hook::get_program_id(&mint_state_with_extensions);
+
+    let mut instruction = spl_token_2022::instruction::transfer_checked(
+        token_program.key,
+        from.key,
+        mint.key,
+        to.key,
+        authority.key,
+        &[],
+        amount,
+        decimals,
+    )?;
+
+    let mut account_infos = vec![from.clone(), mint.clone(), to.clone(), authority.clone()];
+
+    if let Some(hook_program_id) = hook_program_id {
+        require!(
+            WHITELISTED_TRANSFER_HOOK_MINTS.contains(&mint.key()),
+            OrderEngineError::Token2022MintExtensionNotSupported
+        );
+
+        spl_transfer_hook_interface::onchain::add_extra_accounts_for_execute_cpi(
+            &mut instruction,
+            &mut account_infos,
+            &hook_program_id,
+            from,
+            mint.clone(),
+            to,
+            authority,
+            amount,
+            remaining_accounts,
+        )?;
+    }
+
+    solana_program::program::invoke_signed(&instruction, &account_infos, &[]).map_err(Into::into)
 }
 
 #[derive(Accounts)]
