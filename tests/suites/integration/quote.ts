@@ -34,7 +34,7 @@ describe('Webhook e2e API Quote', () => {
       useWsol: false,
       asLegacyTransaction: false,
       excludeDexes: "",
-      excludeRouters: "metis%2Chashflow%2Cdflow",
+      excludeRouters: "metis,hashflow,dflow,pyth,okx",
       taker: taker,
       webhookId: params.WEBHOOK_ID
     }
@@ -93,7 +93,7 @@ describe('Webhook e2e API Quote', () => {
       useWsol: false,
       asLegacyTransaction: false,
       excludeDexes: "",
-      excludeRouters: "metis%2Chashflow%2Cdflow",
+      excludeRouters: "metis,hashflow,dflow,pyth,okx",
       webhookId: params.WEBHOOK_ID
     }
 
@@ -147,7 +147,7 @@ describe('Webhook e2e API Quote', () => {
       useWsol: false,
       asLegacyTransaction: false,
       excludeDexes: "",
-      excludeRouters: "metis%2Chashflow%2Cdflow",
+      excludeRouters: "metis,hashflow,dflow,pyth,okx",
       webhookId: params.WEBHOOK_ID
     }
 
