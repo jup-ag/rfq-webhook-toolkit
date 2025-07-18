@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 pub mod error;
 mod instructions;
+mod transfer_hook;
 
 use instructions::*;
 
