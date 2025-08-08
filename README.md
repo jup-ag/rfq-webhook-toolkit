@@ -126,13 +126,13 @@ When sending the quote request, the RFQ system includes the following headers:
 
 ## Expiry information
 
-We enforce a fixed expiry timing flow for all quotes and transactions. When creating a quote, the transaction expiry is set to **50 seconds** from the creation time. Of this, **25 seconds** are reserved for the webhook to verify, sign, and send the transaction on-chain. The remaining **25 seconds** are allocated for the user to accept the quote. Additionally, the frontend automatically re-quotes every 5 seconds.
+We enforce a fixed expiry timing flow for all quotes and transactions. When creating a quote, the transaction expiry is set to **55 seconds** from the creation time. Of this, **20 seconds** are reserved for the webhook to verify, sign, and send the transaction on-chain. The remaining **35 seconds** are allocated for the user to accept the quote. Additionally, the frontend automatically re-quotes every 5 seconds.
 
 Summary:
 
-* `transaction_ttl`: 50 seconds
-* `maker_reserved_time`: 25 seconds
-* `user_time` = `transaction_ttl - maker_reserved_time`: 25 seconds
+* `transaction_ttl`: 55 seconds
+* `maker_reserved_time`: 20 seconds
+* `user_time` = `transaction_ttl - maker_reserved_time`: 35 seconds
 
 This fixed expiry flow simplifies integration by:
 
@@ -174,6 +174,14 @@ Market makers are expected to comply with 95% of the quotation swap requests pro
 We will enforce this rule by turning off MMs who fall below 95% in a 1-hour window.
 
 If this happens to you, please reach out to us on Telegram to confirm that you are ready to resume operations and we will re-enable your webhook.
+
+#### Suspension timeouts and Failure Rate logic
+
+- Suspension timeouts are set at 5, 10, 20, and 30 minutes, increasing based on the user's accumulated transaction failures.
+
+- Each confirmed transaction decreases the failure rate by 20%.
+
+- Transactions held by the user for more than 20 seconds are excluded from the failure count.
 
 #### Transaction Crafting
 
