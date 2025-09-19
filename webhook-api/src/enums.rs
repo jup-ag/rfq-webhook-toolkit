@@ -46,5 +46,5 @@ pub enum RejectionReason {
 pub enum SwapState {
     Accepted,
     Rejected,
-    RejectedWithReason(RejectionReason), // Rejected with a specific reason
+    RejectedWithReason(RejectionReason), // EXPERIMENTAL. NOT PROD READY
 }
