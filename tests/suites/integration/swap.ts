@@ -38,7 +38,7 @@ describe('Webhook e2e API Swap', {
       useWsol: false,
       asLegacyTransaction: false,
       excludeDexes: "",
-      excludeRouters: "metis,hashflow,dflow,pyth,okx",
+      excludeRouters: "metis",
       taker: taker,
       webhookId: params.WEBHOOK_ID,
     }
