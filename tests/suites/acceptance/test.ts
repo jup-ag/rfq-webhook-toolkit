@@ -2,8 +2,8 @@ import axios from 'axios';
 import { assert } from 'chai';
 import { describe, expect, it } from 'vitest';
 import * as params from '../../params';
-import {loadKeypairFromFile} from '../../helpers';
-import {BN} from 'bn.js';
+import { loadKeypairFromFile } from '../../helpers';
+import { BN } from 'bn.js';
 import { parse } from 'path';
 import { getPublicKeyFromAddress } from '@solana/kit';
 
@@ -46,7 +46,7 @@ describe('Webhook API Quote', () => {
       tokenOut: params.MINT_A
     }
 
-    await axios.post(url, payload, {headers: HEADERS}).then((response) => {
+    await axios.post(url, payload, { headers: HEADERS }).then((response) => {
       console.log("response --> ", response.data);
 
       expect(response.status).toBe(200);
@@ -61,10 +61,10 @@ describe('Webhook API Quote', () => {
       expect(response.data.amountIn).toBe(payload.amount);
       expect(new BN(response.data.amountOut).gt(new BN(0))).toBe(true);
     }).catch((error) => {
-      if(error.response) {
+      if (error.response) {
         console.log("error.response.data --> ", error.response.data);
         assert.fail(`failed to get quote: unexpected response status ${error.response.status}: ${error.response.data}`);
-      } else if(error.request) {
+      } else if (error.request) {
         console.log("error.request --> ", error.request.data);
         assert.fail('failed to get quote: no response from server');
       } else {
@@ -94,7 +94,7 @@ describe('Webhook API Quote', () => {
       tokenOut: params.MINT_B
     }
 
-    await axios.post(url, payload, {headers: HEADERS}).then((response) => {
+    await axios.post(url, payload, { headers: HEADERS }).then((response) => {
       console.log("response --> ", response.data);
 
       expect(response.status).toBe(200);
@@ -108,10 +108,10 @@ describe('Webhook API Quote', () => {
       expect(response.data.amountOut).toBe(payload.amount);
       expect(new BN(response.data.amountIn).gt(new BN(0))).toBe(true);
     }).catch((error) => {
-      if(error.response) {
+      if (error.response) {
         console.log("error.response.data --> ", error.response.data);
         assert.fail(`failed to get quote: unexpected response status ${error.response.status}: ${error.response.data}`);
-      } else if(error.request) {
+      } else if (error.request) {
         console.log("error.request --> ", error.request.data);
         assert.fail('failed to get quote: no response from server');
       } else {
@@ -139,14 +139,14 @@ describe('Webhook API Quote', () => {
       tokenOut: "fake3KUxqvJ5erXobKTYFtL2BpTgGzy7B9AcRcXeCwWvFM",
     }
 
-    await axios.post(url, payload, {headers: HEADERS}).then((response) => {
+    await axios.post(url, payload, { headers: HEADERS }).then((response) => {
       console.log("response --> ", response.data);
       assert.fail('expected 404 response');
     }).catch((error) => {
-      if(error.response) {
+      if (error.response) {
         console.log("error.response.data --> ", error.response.data);
         expect(error.response.status).toBe(404);
-      } else if(error.request) {
+      } else if (error.request) {
         console.log("error.request --> ", error.request.data);
         assert.fail('failed to get quote: no response from server');
       } else {
@@ -177,10 +177,10 @@ describe('Webhook API Quote', () => {
       //const SIGNATURE_LENGTH = 88; // 64 bytes encoded in base58
 
     }).catch((error) => {
-      if(error.response) {
+      if (error.response) {
         console.log("error.response.data --> ", error.response.data);
         assert.fail(`failed to swap: unexpected response status ${error.response.status}: ${error.response.data}`);
-      } else if(error.request) {
+      } else if (error.request) {
         console.log("error.request --> ", error.request.data);
         assert.fail('failed to swap: no response from server');
       } else {
@@ -203,7 +203,7 @@ describe('Webhook API Quote', () => {
       transaction: "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAIABw1+jAiHYL/eHd3PMsF/IJuCQu5SqvEx+s2I0OosbQsG8kjAG1BZAFRV2dywxrzs3LT7Wy6rwamoK1c5K6qkDwTmwoAL86DDaPJrpECH4O7FIcjNK8aXLr8U+vEPOkKqMIbT6oz1rKyozQUgdRIXXEPO9Upd2Z7eIKFrVSU3OPOX3N7E3kRk8Ll8XsOf5Ir4ISzHf+0ZUtqBSXSNVE5iS+sA4iF2IlhNfbkvqPIGGddbql5WIVIAOvUkFwCrBoXw04EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABHnZx8wQNd5yEfmetIwJ1wsr31vfni5WuKH7taLqMycG3fbh12Whk9nL4UbO63msHLSF7V9bN5E6jPWFfv8AqUpYSftyo7vpH9xbDmpX9jxaHLRbIGem7Qys02OVyKECjJclj04kifG7PRApFI4NgwtaE5na/xCEBI572Nvp+FnG+nrzvtutOj1l82qryXQxsbvkwtL24OR8pgIDRS9dYSdenhhyIvZ+yaOk0Giv3sQzHPEybygyONx7iDX7IHF2BAcACQMK0gAAAAAAAAcABQIdmAAACwYBBAEMBgkBAQoLAQACBQQDCAkMCQYjqGC3o1wKKKAAypo7AAAAAJgWfQEAAAAAaiqpZwAAAAAKAAAA"
     };
 
-    await axios.post(url, payload, {headers: HEADERS}).then((response) => {
+    await axios.post(url, payload, { headers: HEADERS }).then((response) => {
       console.log("response --> ", response.data);
 
       expect(response.status).toBe(200);
@@ -212,10 +212,10 @@ describe('Webhook API Quote', () => {
       expect(response.data).toHaveProperty('rejectionReason');
       expect(response.data.rejectionReason).toBeTruthy();
     }).catch((error) => {
-      if(error.response) {
+      if (error.response) {
         console.log("error.response.data --> ", error.response.data);
         assert.fail(`failed to swap: unexpected response status ${error.response.status}: ${error.response.data}`);
-      } else if(error.request) {
+      } else if (error.request) {
         console.log("error.request --> ", error.request.data);
         assert.fail('failed to swap: no response from server');
       } else {
@@ -226,11 +226,77 @@ describe('Webhook API Quote', () => {
   });
 
 
+  it('should return a rejection with insufficient balance reason', async () => {
+    const url = `${WEBHOOK_URL}/swap`;
+    console.log('request url: ', url);
+
+    const payload = {
+      quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
+      requestId: "00000000-0000-0000-0000-000000000003", // special requestId to simulate rejection with insufficient balance
+      transaction: "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAIABw1+jAiHYL/eHd3PMsF/IJuCQu5SqvEx+s2I0OosbQsG8kjAG1BZAFRV2dywxrzs3LT7Wy6rwamoK1c5K6qkDwTmwoAL86DDaPJrpECH4O7FIcjNK8aXLr8U+vEPOkKqMIbT6oz1rKyozQUgdRIXXEPO9Upd2Z7eIKFrVSU3OPOX3N7E3kRk8Ll8XsOf5Ir4ISzHf+0ZUtqBSXSNVE5iS+sA4iF2IlhNfbkvqPIGGddbql5WIVIAOvUkFwCrBoXw04EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABHnZx8wQNd5yEfmetIwJ1wsr31vfni5WuKH7taLqMycG3fbh12Whk9nL4UbO63msHLSF7V9bN5E6jPWFfv8AqUpYSftyo7vpH9xbDmpX9jxaHLRbIGem7Qys02OVyKECjJclj04kifG7PRApFI4NgwtaE5na/xCEBI572Nvp+FnG+nrzvtutOj1l82qryXQxsbvkwtL24OR8pgIDRS9dYSdenhhyIvZ+yaOk0Giv3sQzHPEybygyONx7iDX7IHF2BAcACQMK0gAAAAAAAAcABQIdmAAACwYBBAEMBgkBAQoLAQACBQQDCAkMCQYjqGC3o1wKKKAAypo7AAAAAJgWfQEAAAAAaiqpZwAAAAAKAAAA"
+    };
+
+    await axios.post(url, payload, { headers: HEADERS }).then((response) => {
+      console.log("response --> ", response.data);
+
+      expect(response.status).toBe(200);
+      expect(response.data.quoteId).toBe(payload.quoteId);
+      expect(response.data.state).toEqual({ rejectedWithReason: "insufficientBalance" });
+      expect(response.data).toHaveProperty('state');
+      expect(response.data.state).toHaveProperty('rejectedWithReason');
+      expect(response.data.state.rejectedWithReason).toBe("insufficientBalance");
+    }).catch((error) => {
+      if (error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        assert.fail(`failed to swap: unexpected response status ${error.response.status}: ${error.response.data}`);
+      } else if (error.request) {
+        console.log("error.request --> ", error.request.data);
+        assert.fail('failed to swap: no response from server');
+      } else {
+        console.log("error --> ", error);
+        assert.fail('failed to swap: unknown error');
+      }
+    });
+  });
+
+  it('should return a rejection with signature verification failed reason', async () => {
+    const url = `${WEBHOOK_URL}/swap`;
+    console.log('request url: ', url);
+
+    const payload = {
+      quoteId: "59db3e19-c7b0-4753-a8aa-206701004498",
+      requestId: "00000000-0000-0000-0000-000000000004", // special requestId to simulate rejection with signature verification failed
+      transaction: "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAIABw1+jAiHYL/eHd3PMsF/IJuCQu5SqvEx+s2I0OosbQsG8kjAG1BZAFRV2dywxrzs3LT7Wy6rwamoK1c5K6qkDwTmwoAL86DDaPJrpECH4O7FIcjNK8aXLr8U+vEPOkKqMIbT6oz1rKyozQUgdRIXXEPO9Upd2Z7eIKFrVSU3OPOX3N7E3kRk8Ll8XsOf5Ir4ISzHf+0ZUtqBSXSNVE5iS+sA4iF2IlhNfbkvqPIGGddbql5WIVIAOvUkFwCrBoXw04EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABHnZx8wQNd5yEfmetIwJ1wsr31vfni5WuKH7taLqMycG3fbh12Whk9nL4UbO63msHLSF7V9bN5E6jPWFfv8AqUpYSftyo7vpH9xbDmpX9jxaHLRbIGem7Qys02OVyKECjJclj04kifG7PRApFI4NgwtaE5na/xCEBI572Nvp+FnG+nrzvtutOj1l82qryXQxsbvkwtL24OR8pgIDRS9dYSdenhhyIvZ+yaOk0Giv3sQzHPEybygyONx7iDX7IHF2BAcACQMK0gAAAAAAAAcABQIdmAAACwYBBAEMBgkBAQoLAQACBQQDCAkMCQYjqGC3o1wKKKAAypo7AAAAAJgWfQEAAAAAaiqpZwAAAAAKAAAA"
+    };
+
+    await axios.post(url, payload, { headers: HEADERS }).then((response) => {
+      console.log("response --> ", response.data);
+
+      expect(response.status).toBe(200);
+      expect(response.data.quoteId).toBe(payload.quoteId);
+      expect(response.data.state).toEqual({ rejectedWithReason: "signatureVerificationFailed" });
+      expect(response.data).toHaveProperty('state');
+      expect(response.data.state).toHaveProperty('rejectedWithReason');
+      expect(response.data.state.rejectedWithReason).toBe("signatureVerificationFailed");
+    }).catch((error) => {
+      if (error.response) {
+        console.log("error.response.data --> ", error.response.data);
+        assert.fail(`failed to swap: unexpected response status ${error.response.status}: ${error.response.data}`);
+      } else if (error.request) {
+        console.log("error.request --> ", error.request.data);
+        assert.fail('failed to swap: no response from server');
+      } else {
+        console.log("error --> ", error);
+        assert.fail('failed to swap: unknown error');
+      }
+    });
+  });
+
   it('should return a successful accepted token list', async () => {
     const url = `${WEBHOOK_URL}/tokens`;
     console.log('request url: ', url);
 
-    await axios.get(url, {headers: HEADERS}).then((response) => {
+    await axios.get(url, { headers: HEADERS }).then((response) => {
       console.log("response --> ", response.data);
       expect(response.status).toBe(200);
       expect(response.data.length).toBeGreaterThanOrEqual(0);
@@ -239,10 +305,10 @@ describe('Webhook API Quote', () => {
         expect(isValidSolanaAddress(tokenAddress)).resolves.toBe(true);
       }
     }).catch((error) => {
-      if(error.response) {
+      if (error.response) {
         console.log("error.response.data --> ", error.response.data);
         assert.fail(`failed to swap: unexpected response status ${error.response.status}: ${error.response.data}`);
-      } else if(error.request) {
+      } else if (error.request) {
         console.log("error.request --> ", error.request.data);
         assert.fail('failed to swap: no response from server');
       } else {
