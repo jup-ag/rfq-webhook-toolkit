@@ -28,11 +28,11 @@ reqwest = { version = "0.12", features = [
   "json",
   "blocking",
 ] }
-solana-client = "~2"
-solana-program = "~2"
-solana-program-test = "~2"
-solana-rpc-client = "~2"
-solana-sdk = "~2"
+solana-client = "~2.3"
+solana-program = "~2.3"
+solana-program-test = "~2.3"
+solana-rpc-client = "~2.3"
+solana-sdk = "~2.3"
 spl-token-client = { version = "0.16.0", default-features = false }
 spl-token-2022 = { version = "9.0.0" }
 
@@ -53,8 +53,8 @@ itertools = "0.14.0"
 num_cpus = "1.16"
 thiserror = "2.0.11"
 utoipa = { version = "5.3.1" }
-utoipa-swagger-ui = "9.0.0" # Optional for Swagger UI
-utoipa-axum = "0.2.0" # Optional for Axum
+utoipa-swagger-ui = "9.0.0"                                                    # Optional for Swagger UI
+utoipa-axum = "0.2.0"                                                          # Optional for Axum
 metrics = { version = "0.24.1", default-features = false }
 metrics-exporter-prometheus = { version = "0.16.2", default-features = false }
 dotenvy = "0.15.7"
