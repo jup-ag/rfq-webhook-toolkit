@@ -38,7 +38,7 @@ pub struct QuoteRequest {
     /// Flag to indicate if token is wSOL
     #[schema(examples("true", "false"))]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_token_in_wsol: Option<bool>,
+    pub is_wsol: Option<bool>,
 }
 
 /// Order to be fulfilled by the Market Maker
