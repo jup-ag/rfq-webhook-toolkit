@@ -152,6 +152,7 @@ pub struct ValidatedSimilarFill {
     pub taker: Pubkey,
     pub input_amount: u64,
     pub input_mint: Pubkey,
+    pub output_mint: Pubkey,
     pub taker_input_mint_token_account: Pubkey,
     pub expire_at: i64,
 }
@@ -279,6 +280,7 @@ pub fn validate_similar_fill_sanitized_message(
             // We check if the taker has enough balance to fill the order first
             let taker = accounts.first().context("Invalid fill ix data")?.pubkey;
             let input_mint = accounts.get(6).context("Invalid fill ix data")?.pubkey;
+            let output_mint = accounts.get(8).context("Invalid fill ix data")?.pubkey;
 
             let taker_input_mint_token_account = accounts
                 .get(2)
@@ -289,6 +291,7 @@ pub fn validate_similar_fill_sanitized_message(
                 taker: *taker,
                 input_amount: fill_ix.input_amount,
                 input_mint: *input_mint,
+                output_mint: *output_mint,
                 taker_input_mint_token_account: *taker_input_mint_token_account,
                 expire_at: fill_ix.expire_at,
             })
@@ -395,6 +398,7 @@ mod tests {
             taker,
             input_amount,
             input_mint,
+            output_mint: fill_ix.accounts[8].pubkey,
             taker_input_mint_token_account: taker_input_mint_token_account
                 .unwrap_or(order_engine::ID),
             expire_at,
