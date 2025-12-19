@@ -161,7 +161,7 @@ pub fn validate_similar_fill_sanitized_message(
     sanitized_message: SanitizedMessage,
     original_sanitized_message: SanitizedMessage,
 ) -> Result<ValidatedSimilarFill> {
-    let message_header = original_sanitized_message.header();
+    let message_header = sanitized_message.header();
     let original_message_header = original_sanitized_message.header();
 
     ensure!(
@@ -191,6 +191,7 @@ pub fn validate_similar_fill_sanitized_message(
 
     let mut validated_similar_fill = None;
     let mut compute_unit_price = None;
+    let mut compute_unit_limit = None;
 
     // First check matching instructions between original and sanitized
     let mut sanitized_instructions_iter = sanitized_instructions.into_iter();
@@ -232,10 +233,17 @@ pub fn validate_similar_fill_sanitized_message(
             "Instruction accounts did not match the original message {index}, {original_program_id}"
         );
         if original_program_id == &compute_budget::ID {
-            // Allow for compute unit price to change, since some wallets change it
+            // Allow for compute unit price and limit to change, since some wallets change it
             let compute_budget_ix = try_from_slice_unchecked::<ComputeBudgetInstruction>(data)?;
             match compute_budget_ix {
-                ComputeBudgetInstruction::SetComputeUnitLimit(_) => (),
+                ComputeBudgetInstruction::SetComputeUnitLimit(limit) => {
+                    ensure!(
+                        compute_unit_limit.is_none(),
+                        "Compute unit limit is already set"
+                    );
+                    compute_unit_limit = Some(limit);
+                    continue;
+                }
                 ComputeBudgetInstruction::SetComputeUnitPrice(price) => {
                     ensure!(
                         compute_unit_price.is_none(),
@@ -304,7 +312,7 @@ pub fn validate_similar_fill_sanitized_message(
         );
 
         ensure!(
-            data.get(0)
+            data.first()
                 .map(|discriminator| ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(discriminator))
                 .unwrap_or(false),
             "Invalid Lighthouse instruction discriminator at index {real_index}"
@@ -412,6 +420,36 @@ mod tests {
                 original_sanitized_message.clone()
             )
             .unwrap()
+        );
+
+        // Different number of required signatures
+        let different_signature_fill_ix = Instruction {
+            program_id: order_engine::ID,
+            accounts: vec![AccountMeta {
+                pubkey: taker,
+                is_signer: false,
+                is_writable: false,
+            }],
+            data: order_engine::client::args::Fill {
+                input_amount,
+                output_amount: 200,
+                expire_at,
+            }
+            .data(),
+        };
+        let sanitized_message = make_sanitized_transaction(
+            &maker,
+            &[different_signature_fill_ix.clone()],
+            Hash::new_unique(),
+        );
+        assert_eq!(
+            "Number of required signatures did not match",
+            validate_similar_fill_sanitized_message(
+                sanitized_message,
+                original_sanitized_message.clone()
+            )
+            .unwrap_err()
+            .to_string()
         );
 
         // Change accounts

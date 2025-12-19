@@ -22,10 +22,29 @@ pub enum Protocol {
 }
 
 #[derive(
-    Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, Display, EnumString,
+    Debug,
+    Copy,
+    Clone,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    ToSchema,
+    Display,
+    EnumString,
+    Default,
 )]
+#[serde(rename_all = "camelCase")]
+pub enum RejectionReason {
+    #[default]
+    InsufficientBalance,
+    SignatureVerificationFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, Display, EnumString)]
 #[serde(rename_all = "camelCase")]
 pub enum SwapState {
     Accepted,
     Rejected,
+    RejectedWithReason(RejectionReason), // EXPERIMENTAL. NOT PROD READY
 }

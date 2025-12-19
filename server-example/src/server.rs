@@ -7,18 +7,20 @@
 ///
 ///
 use anyhow::Result;
-use once_cell::sync::Lazy;
 use order_engine_sdk::transaction::{
     deserialize_transaction_base64_into_transaction_details, TransactionDetails,
 };
 use solana_rpc_client::rpc_client::SerializableTransaction;
-use solana_sdk::{signature::Keypair, signer::Signer};
+use solana_sdk::{
+    signature::Keypair,
+    signer::{EncodableKey, Signer},
+};
 use thiserror::Error;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use utoipauto::utoipauto;
 
-use std::{collections::HashMap, sync::Arc, time::Duration, vec};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use axum::{
     extract::{rejection::JsonRejection, Query, State},
@@ -43,14 +45,6 @@ use webhook_api::{
 };
 
 use crate::config::Config;
-
-static SUPPORTED_TOKENS: Lazy<Vec<String>> = Lazy::new(|| {
-    vec![
-        "So11111111111111111111111111111111111111112".to_string(),
-        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(),
-        "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN".to_string(),
-    ]
-});
 
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -136,10 +130,18 @@ async fn example_quote(
         headers
     );
 
+    let is_input_mint_supported = state
+        .config
+        .supported_tokens
+        .contains(&quote_request.token_in);
+
+    let is_output_mint_supported = state
+        .config
+        .supported_tokens
+        .contains(&quote_request.token_out);
+
     // if the  the token pair is not supported, return 404
-    if !SUPPORTED_TOKENS.contains(&quote_request.token_in)
-        || !SUPPORTED_TOKENS.contains(&quote_request.token_out)
-    {
+    if !is_input_mint_supported || !is_output_mint_supported {
         return Err(ApiError::NotFound());
     }
 
@@ -301,8 +303,10 @@ responses(
     (status = 200, body= Vec<String>),
     (status = 400, body= ErrorResponse),
 ))]
-pub async fn example_tokens_list() -> Result<Json<Vec<String>>, ApiError> {
-    Ok(Json(SUPPORTED_TOKENS.clone()))
+async fn example_tokens_list(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<String>>, ApiError> {
+    Ok(Json(state.config.supported_tokens.clone()))
 }
 
 async fn get_health() -> Result<(), ApiError> {
@@ -350,10 +354,7 @@ pub async fn serve(config: Config) {
     let keypair = match &config.maker_keypair {
         Some(private_key_file) => {
             tracing::info!("loading keypair from file: {}", private_key_file);
-            Keypair::from_base58_string(
-                &std::fs::read_to_string(private_key_file)
-                    .expect("Failed to parse keypair from file"),
-            )
+            Keypair::read_from_file(private_key_file).expect("Invalid keypair file")
         }
         None => {
             tracing::info!("Loaded keypair from file");
@@ -366,7 +367,7 @@ pub async fn serve(config: Config) {
     // create the shared state
     let app_state = Arc::new(AppState {
         config: config.clone(),
-        keypair: keypair,
+        keypair,
     });
 
     // build the axum router
