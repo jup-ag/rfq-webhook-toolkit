@@ -36,9 +36,10 @@ pub enum Protocol {
 )]
 #[serde(rename_all = "camelCase")]
 pub enum RejectionReason {
-    #[default]
     InsufficientBalance,
     SignatureVerificationFailed,
+    #[default]
+    BotActivityDetected,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, Display, EnumString)]
@@ -46,7 +47,7 @@ pub enum RejectionReason {
 pub enum SwapState {
     Accepted,
     Rejected,
-    RejectedWithReason(RejectionReason), // EXPERIMENTAL. NOT PROD READY
+    RejectedWithReason(RejectionReason),
 }
 
 #[cfg(test)]
