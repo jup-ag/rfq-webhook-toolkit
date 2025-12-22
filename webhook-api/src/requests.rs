@@ -35,6 +35,10 @@ pub struct QuoteRequest {
     /// Fee in basis points to be charged by the Market Maker
     #[schema(examples("1", "20"), maximum = 10_000)]
     pub fee_bps: u16,
+    /// Flag to indicate if token is wSOL
+    #[schema(examples("true", "false"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_wsol: Option<bool>,
 }
 
 /// Order to be fulfilled by the Market Maker
