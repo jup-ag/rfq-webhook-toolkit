@@ -2,7 +2,7 @@ name: Quality Check
 on:
   pull_request:
     branches:
-      - "**"
+      - '**'
 
 permissions:
   contents: read
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -26,11 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          rustflags: "-A warnings"
+          rustflags: '-A warnings'
       - name: Build
         run: cargo build --release
   test:
@@ -38,21 +38,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          rustflags: "-A warnings"
+          rustflags: '-A warnings'
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
       - name: Run tests with coverage
         run: |
           RPC_URLS=${{ secrets.RPC_URLS }} cargo llvm-cov --release --workspace --summary-only --remap-path-prefix --json > coverage.json
       - name: Generate coverage summary
         env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         run: |
           # Read JSON and convert it to Markdown table using jq
           echo "<details><summary>Coverage report</summary>" > coverage.md

@@ -80,8 +80,8 @@ pnpm run integration
 
 To test a webhook via the [edge UI](https://edge.jup.ag) with you can use a browser extension ([example](https://chromewebstore.google.com/search/Inssman)) that allows to modify http request params, adding the rules:
 
-- host: `https://quote-proxy-edge.raccoons.dev/*`
-- param: `webhookID=<your_webhook_id>`
+- host: `https://preprod.ultra-api.jup.ag/*`
+- param: `webhookId=<your_webhook_id>`
 
 
 
