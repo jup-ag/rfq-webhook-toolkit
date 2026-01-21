@@ -1,514 +1,147 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "server-example",
-    "description": "",
-    "license": {
-      "name": ""
-    },
-    "version": "0.1.0"
+    "title": "RFQ Webhook API - Market Maker Standard",
+    "description": "Solana tabanlı RFQ sağlayıcıları için yüksek performanslı ve güvenli Webhook API standardı. Bu spesifikasyon, Quote alma ve Swap yürütme işlemlerini kapsar.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Market Maker Destek",
+      "url": "https://zksync.io/"
+    }
   },
+  "servers": [
+    {
+      "url": "https://api.marketmaker.com/v1",
+      "description": "Production Server"
+    }
+  ],
   "paths": {
     "/quote": {
       "post": {
-        "tags": [
-          "crate::server"
-        ],
-        "summary": "Example quote handler",
-        "description": "This is an example quote handler that returns a hardcoded quote response",
-        "operationId": "example_quote",
-        "parameters": [
-          {
-            "name": "X-API-KEY",
-            "in": "header",
-            "description": "Optional API Key (if required by the webhook)",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          }
-        ],
+        "tags": ["Quoting"],
+        "summary": "Teklif Al (Get Quote)",
+        "operationId": "getQuote",
+        "security": [{ "ApiKeyAuth": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/QuoteRequest"
-              }
+              "schema": { "$ref": "#/components/schemas/QuoteRequest" }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
-            "description": "",
+            "description": "Başarılı Teklif",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/QuoteResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/QuoteResponse" }
               }
             }
           },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
+          "401": { "$ref": "#/components/responses/UnauthorizedError" },
+          "429": { "$ref": "#/components/responses/RateLimitError" },
+          "500": { "$ref": "#/components/responses/InternalError" }
         }
       }
     },
     "/swap": {
       "post": {
-        "tags": [
-          "crate::server"
-        ],
-        "summary": "Example swap handler",
-        "description": "This is an example swap handler that showcase how to execute a swap from the MM side",
-        "operationId": "example_swap",
-        "parameters": [
-          {
-            "name": "X-API-KEY",
-            "in": "header",
-            "description": "Optional API Key (if required by the webhook)",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          }
-        ],
+        "tags": ["Execution"],
+        "summary": "Takası Gerçekleştir (Execute Swap)",
+        "operationId": "executeSwap",
+        "security": [{ "ApiKeyAuth": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SwapRequest"
-              }
+              "schema": { "$ref": "#/components/schemas/SwapRequest" }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
-            "description": "",
+            "description": "Swap Durumu",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SwapResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/SwapResponse" }
               }
             }
           },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/tokens": {
-      "get": {
-        "tags": [
-          "crate::server"
-        ],
-        "operationId": "example_tokens_list",
-        "parameters": [
-          {
-            "name": "X-API-KEY",
-            "in": "header",
-            "description": "Optional API Key (if required by the webhook)",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
+          "400": { "description": "Geçersiz Transaction Verisi" },
+          "410": { "description": "Quote Süresi Doldu (Expired)" }
         }
       }
     }
   },
   "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-KEY",
+        "description": "Webhook güvenliği için Market Maker tarafından sağlanan gizli anahtar."
+      }
+    },
+    "responses": {
+      "UnauthorizedError": {
+        "description": "API Anahtarı geçersiz veya eksik.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "RateLimitError": {
+        "description": "Çok fazla istek gönderildi."
+      },
+      "InternalError": {
+        "description": "Sunucu tarafında beklenmedik hata."
+      }
+    },
     "schemas": {
-      "ErrorResponse": {
-        "type": "object",
-        "required": [
-          "message"
-        ],
-        "properties": {
-          "message": {
-            "type": "string",
-            "examples": [
-              "webhook api error message or code"
-            ]
-          }
-        }
-      },
-      "Protocol": {
-        "type": "string",
-        "enum": [
-          "v1"
-        ]
-      },
       "QuoteRequest": {
         "type": "object",
-        "description": "Request to get a quote from the Market Maker",
-        "required": [
-          "requestId",
-          "quoteId",
-          "tokenIn",
-          "amount",
-          "tokenOut",
-          "quoteType",
-          "protocol",
-          "feeBps"
-        ],
+        "required": ["requestId", "quoteId", "tokenIn", "tokenOut", "amount"],
         "properties": {
-          "amount": {
-            "type": "string",
-            "examples": [
-              "250000000"
-            ]
-          },
-          "feeBps": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Fee in basis points to be charged by the Market Maker",
-            "examples": [
-              "1",
-              "20"
-            ],
-            "maximum": 10000,
-            "minimum": 0
-          },
-          "protocol": {
-            "$ref": "#/components/schemas/Protocol"
-          },
-          "quoteId": {
-            "type": "string",
-            "examples": [
-              "59db3e19-c7b0-4753-a8aa-206701004498"
-            ]
-          },
-          "quoteType": {
-            "$ref": "#/components/schemas/QuoteType"
-          },
-          "requestId": {
-            "type": "string",
-            "examples": [
-              "629bddf3-0038-43a6-8956-f5433d6b1191"
-            ]
-          },
-          "suggestedPrioritizationFees": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "If no taker is provided, the there will be no suggested fee\nThis is the suggested compute unit price in micro lamports to be set when building the transaction\nMMs will have the option to ignore our suggested fee and provide their own when responding to this quote",
-            "examples": [
-              "10000"
-            ],
-            "minimum": 0
-          },
-          "taker": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Taker is optional here as there are times we want to just get a quote without user signing in\nWhen user signs in, we should try to requote again so the new quote request will have a taker",
-            "examples": [
-              "5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"
-            ]
-          },
-          "tokenIn": {
-            "type": "string",
-            "examples": [
-              "So11111111111111111111111111111111111111112"
-            ]
-          },
-          "tokenOut": {
-            "type": "string",
-            "examples": [
-              "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-            ]
-          }
+          "requestId": { "type": "string", "format": "uuid" },
+          "quoteId": { "type": "string", "format": "uuid" },
+          "tokenIn": { "type": "string", "description": "Solana Mint Address (Base58)" },
+          "tokenOut": { "type": "string", "description": "Solana Mint Address (Base58)" },
+          "amount": { "type": "string", "pattern": "^[0-9]+$", "example": "250000000" },
+          "feeBps": { "type": "integer", "minimum": 0, "maximum": 10000, "default": 0 }
         }
       },
       "QuoteResponse": {
         "type": "object",
-        "description": "Response to a quote request from the Market Maker",
-        "required": [
-          "requestId",
-          "quoteId",
-          "tokenIn",
-          "amountIn",
-          "tokenOut",
-          "quoteType",
-          "protocol",
-          "amountOut",
-          "maker"
-        ],
+        "required": ["quoteId", "amountOut", "maker"],
         "properties": {
-          "amountIn": {
-            "type": "string",
-            "examples": [
-              "250000000"
-            ]
-          },
-          "amountOut": {
-            "type": "string",
-            "examples": [
-              "1000000000"
-            ]
-          },
-          "maker": {
-            "type": "string",
-            "examples": [
-              "8iJxVDtFxnWpdCvdrgNDSXigxHo9vLf7KCS1pNKrs5Nh"
-            ]
-          },
-          "prioritizationFeeToUse": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Prioritization fee compute unit price in micro lamports to be set in the fill transaction\nIt is estimated using https://docs.triton.one/chains/solana/improved-priority-fees-api 50th percentile, mean priority fee over the last 20 slots\nMMs to return us the fees they want to use either the suggested_prioritization_fees in the quote request or a custom amount",
-            "examples": [
-              "10000"
-            ],
-            "minimum": 0
-          },
-          "protocol": {
-            "$ref": "#/components/schemas/Protocol"
-          },
-          "quoteId": {
-            "type": "string",
-            "examples": [
-              "59db3e19-c7b0-4753-a8aa-206701004498"
-            ]
-          },
-          "quoteType": {
-            "$ref": "#/components/schemas/QuoteType"
-          },
-          "requestId": {
-            "type": "string",
-            "examples": [
-              "629bddf3-0038-43a6-8956-f5433d6b1191"
-            ]
-          },
-          "taker": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Taker is optional here as there are times we want to just get a quote without user signing in",
-            "examples": [
-              "5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"
-            ]
-          },
-          "tokenIn": {
-            "type": "string",
-            "examples": [
-              "So11111111111111111111111111111111111111112"
-            ]
-          },
-          "tokenOut": {
-            "type": "string",
-            "examples": [
-              "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-            ]
-          }
+          "quoteId": { "type": "string", "format": "uuid" },
+          "amountOut": { "type": "string", "pattern": "^[0-9]+$" },
+          "maker": { "type": "string", "description": "MM Public Key" },
+          "prioritizationFeeToUse": { "type": "integer", "format": "int64", "minimum": 0 }
         }
-      },
-      "QuoteType": {
-        "type": "string",
-        "enum": [
-          "exactIn",
-          "exactOut"
-        ]
       },
       "SwapRequest": {
         "type": "object",
-        "description": "Order to be fulfilled by the Market Maker",
-        "required": [
-          "requestId",
-          "quoteId",
-          "transaction"
-        ],
+        "required": ["requestId", "quoteId", "transaction"],
         "properties": {
-          "quoteId": {
-            "type": "string",
-            "examples": [
-              "59db3e19-c7b0-4753-a8aa-206701004498"
-            ]
-          },
-          "requestId": {
-            "type": "string",
-            "examples": [
-              "629bddf3-0038-43a6-8956-f5433d6b1191"
-            ]
-          },
-          "transaction": {
-            "type": "string",
-            "description": "Base64 encoded versioned transaction",
-            "examples": [
-              "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAz9drCWYYQ68kASuBn9OHQMhApFELvj44L1s76RFusqcFQ3u65aig44TQ3Fmb9CadUg6y5zJuBNnD1IxqvKXIPmA4AmO5Dcos4MycwafOIB13mDRFQ1GIRqKG3olkhi48jyGiqvTscHPp0TmqflJdR4gzVibQqwIj1iO1jXHw5Mt99q5m2Edp3glkLYOc/yT1HqD+ndBXyPYu16F84mC8rspYEafRZphIlog6Q2qO4TFgN8ICPW2yl1kkJ2UutYEAxh1w4ztXWtKZr0O736NcYMPOKkRjP8CiDXheWMdaprkzkaA5jAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvEC3LPJppXp/7XKg0lfT6E87hQi8th5zPmi1Q6AAAAAiDuU6+gSRr+Hx/3xlmJE16rC5kSGnxcWkohAAAAAAAg5izz2u1OeCnop+hOiUf4tBZ6V2mJYyUZ0OXgw2U/A4C33oSysI64Na/dJmwBs/WKYt6Nnkl1JWNR65pjlN4nAKWsCeLSm9f59f75OR3BSLGqzUjgzq3orAORpoFbS1sy0skiTfwZdbBKqGpHSo0ZZfwJkHDO1fB4frglAsUPj0YoKeHP5JwEP4awSwmz4vanicFfQDIeA6ZM8UhZEZe0FLBZAAyNq5O0AAAAAAA2AAagQ9iAAAlYAMq28zUDAlb3EiKAFj7JAPtooroIJbdZdUpVUmdUfgBMAAAAAAH4YYwAAAAAAC9MP4tAAAAAAA=="
-            ]
-          }
+          "requestId": { "type": "string", "format": "uuid" },
+          "quoteId": { "type": "string", "format": "uuid" },
+          "transaction": { "type": "string", "description": "Base64 Encoded Solana Transaction" }
         }
       },
       "SwapResponse": {
         "type": "object",
-        "description": "Response to a swap request to the Market Maker",
-        "required": [
-          "quoteId",
-          "state"
-        ],
+        "required": ["state"],
         "properties": {
-          "quoteId": {
-            "type": "string",
-            "examples": [
-              "59db3e19-c7b0-4753-a8aa-206701004498"
-            ]
-          },
-          "rejectionReason": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Optional message to provide more context when the swap is rejected"
-          },
-          "state": {
-            "$ref": "#/components/schemas/SwapState"
-          },
-          "txSignature": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "deprecated": true,
-            "examples": [
-              "5K6CqVweTk4t9K6Xfa1gw7D9rS4GeAa8Z67e2q8Mi7f8QwexqTmtLnZgNeBe93PaRtt8beijqV9t7rp7C7yGfzkXGy2yFbF"
-            ]
-          }
+          "state": { "type": "string", "enum": ["accepted", "rejected"] },
+          "rejectionReason": { "type": "string", "nullable": true }
         }
       },
-      "SwapState": {
-        "type": "string",
-        "enum": [
-          "accepted",
-          "rejected"
-        ]
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" },
+          "code": { "type": "integer" }
+        }
       }
     }
-  },
-  "tags": [
-    {
-      "name": "RFQ Webhook API",
-      "description": "Webhook API for RFQ providers"
-    }
-  ]
+  }
 }
