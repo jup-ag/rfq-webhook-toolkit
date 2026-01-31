@@ -39,6 +39,10 @@ pub struct QuoteResponse {
     #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub receiver: Option<String>,
+    /// Ata account payer
+    #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ata_account_payer: Option<String>,
 }
 
 /// Response to a swap request to the Market Maker
