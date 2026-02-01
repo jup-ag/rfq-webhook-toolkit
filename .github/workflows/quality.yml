@@ -70,7 +70,7 @@ jobs:
           echo "" >> coverage.md
           echo "</details>" >> coverage.md
       - name: Add reactions
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@v5
         with:
           body-path: coverage.md
           issue-number: ${{ github.event.pull_request.number }}
