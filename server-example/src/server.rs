@@ -172,7 +172,6 @@ async fn example_quote(
                 maker: maker_pubkey,
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
                 receiver: quote_request.receiver.clone(),
-                ata_account_payer: quote_request.ata_account_payer.clone(),
             }
         }
         QuoteType::ExactOut => {
@@ -190,7 +189,6 @@ async fn example_quote(
                 maker: maker_pubkey,
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
                 receiver: quote_request.receiver.clone(),
-                ata_account_payer: quote_request.ata_account_payer.clone(),
             }
         }
     };
