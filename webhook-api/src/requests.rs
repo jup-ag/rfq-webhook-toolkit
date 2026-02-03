@@ -43,10 +43,6 @@ pub struct QuoteRequest {
     #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub receiver: Option<String>,
-    /// ATA account payer address
-    #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ata_account_payer: Option<String>,
 }
 
 /// Order to be fulfilled by the Market Maker
