@@ -39,7 +39,7 @@ use tower_http::{
 use tracing::Level as TraceLevel;
 
 use webhook_api::{
-    enums::{QuoteType, SwapState},
+    enums::{QuoteType, RejectionReason, SwapState},
     requests::*,
     responses::*,
 };
@@ -223,6 +223,8 @@ async fn example_swap(
     // For testing purposes on this implementation  we leverage ad-hoc request_id to trigger errors
     const SIMULATE_REJECTION: &str = "00000000-0000-0000-0000-000000000001";
     const SIMULATE_MALFORMED: &str = "00000000-0000-0000-0000-000000000002";
+    const SIMULATE_INSUFFICIENT_BALANCE: &str = "00000000-0000-0000-0000-000000000003";
+    const SIMULATE_SIGNATURE_VERIFICATION_FAILED: &str = "00000000-0000-0000-0000-000000000004";
 
     match quote_request.request_id.as_str() {
         SIMULATE_REJECTION => Ok(Json(SwapResponse {
@@ -230,6 +232,18 @@ async fn example_swap(
             quote_id: quote_request.quote_id.clone(),
             state: SwapState::Rejected,
             rejection_reason: Some("<rejection reason>".to_string()),
+        })),
+        SIMULATE_INSUFFICIENT_BALANCE => Ok(Json(SwapResponse {
+            tx_signature: None,
+            quote_id: quote_request.quote_id.clone(),
+            state: SwapState::RejectedWithReason(RejectionReason::InsufficientBalance),
+            rejection_reason: None,
+        })),
+        SIMULATE_SIGNATURE_VERIFICATION_FAILED => Ok(Json(SwapResponse {
+            tx_signature: None,
+            quote_id: quote_request.quote_id.clone(),
+            state: SwapState::RejectedWithReason(RejectionReason::SignatureVerificationFailed),
+            rejection_reason: None,
         })),
         SIMULATE_MALFORMED => Err(ApiError::BadRequest("Malformed request".to_string())),
         _ => {
