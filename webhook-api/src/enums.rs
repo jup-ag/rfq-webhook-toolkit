@@ -76,7 +76,8 @@ mod tests {
 
         let insufficient_balance_ata =
             SwapState::RejectedWithReason(RejectionReason::InsufficientBalanceForAtaCreation);
-        let insufficient_balance_ata_json = serde_json::to_string(&insufficient_balance_ata).unwrap();
+        let insufficient_balance_ata_json =
+            serde_json::to_string(&insufficient_balance_ata).unwrap();
         println!(
             "InsufficientBalanceForAtaCreation serialized: {}",
             insufficient_balance_ata_json
@@ -90,13 +91,9 @@ mod tests {
             signature_failed_json
         );
 
-        let bot_activity =
-            SwapState::RejectedWithReason(RejectionReason::BotActivityDetected);
+        let bot_activity = SwapState::RejectedWithReason(RejectionReason::BotActivityDetected);
         let bot_activity_json = serde_json::to_string(&bot_activity).unwrap();
-        println!(
-            "BotActivityDetected serialized: {}",
-            bot_activity_json
-        );
+        println!("BotActivityDetected serialized: {}", bot_activity_json);
 
         // Test deserialization
         let deserialized_insufficient: SwapState =
