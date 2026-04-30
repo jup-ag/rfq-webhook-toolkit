@@ -1,0 +1,16 @@
+[package]
+name = "squads-sdk"
+version = "0.1.0"
+edition = { workspace = true }
+
+[dependencies]
+base64 = { workspace = true }
+bincode = { workspace = true }
+sha2 = { workspace = true }
+solana-sdk = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+solana-client = { workspace = true }
+solana-transaction-status = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
