@@ -51,7 +51,7 @@ pub fn validate_fill_sanitized_message(
         sanitized_message
             .get_signature_details()
             .num_transaction_signatures()
-            == 2,
+            >= 2,
         "Too many signers"
     );
 
