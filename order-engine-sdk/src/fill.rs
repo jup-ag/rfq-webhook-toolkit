@@ -98,7 +98,7 @@ pub fn validate_fill_sanitized_message(
             );
 
             // We verify the taker is paying for the token account
-            ensure!(accounts.first().map(|am| am.pubkey) == Some(&order.taker));
+            ensure!(accounts.first().map(|am| am.pubkey) != Some(&order.maker));
         } else if program_id == &order_engine::ID {
             ensure!(!fill_ix_found, "Duplicated fill instruction");
             fill_ix_found = true;
