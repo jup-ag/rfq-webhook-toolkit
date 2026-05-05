@@ -159,7 +159,10 @@ pub fn validate_fill_sanitized_message(
                 output_token_program: *output_token_program,
             });
         } else if program_id == &system_program::ID {
-            ensure!(!transfer_ix_found, "Duplicated receiver transfer instruction");
+            ensure!(
+                !transfer_ix_found,
+                "Duplicated receiver transfer instruction"
+            );
             let receiver = expected_receiver.context("Unexpected transfer instruction")?;
             ensure!(
                 order.output_mint == NATIVE_MINT,
@@ -173,12 +176,24 @@ pub fn validate_fill_sanitized_message(
             let [from, to, ..] = accounts.as_slice() else {
                 bail!("Not enough accounts in system transfer");
             };
-            ensure!(*from.pubkey == order.taker, "Receiver transfer source must be taker");
-            ensure!(*to.pubkey == receiver, "Receiver transfer destination must be the receiver");
-            ensure!(lamports == order.out_amount, "Receiver transfer amount must equal out_amount");
+            ensure!(
+                *from.pubkey == order.taker,
+                "Receiver transfer source must be taker"
+            );
+            ensure!(
+                *to.pubkey == receiver,
+                "Receiver transfer destination must be the receiver"
+            );
+            ensure!(
+                lamports == order.out_amount,
+                "Receiver transfer amount must equal out_amount"
+            );
             transfer_ix_found = true;
         } else if program_id == &token::ID || program_id == &token_2022::ID {
-            ensure!(!transfer_ix_found, "Duplicated receiver transfer instruction");
+            ensure!(
+                !transfer_ix_found,
+                "Duplicated receiver transfer instruction"
+            );
             let receiver = expected_receiver.context("Unexpected transfer instruction")?;
             ensure!(
                 order.output_mint != NATIVE_MINT,
@@ -209,11 +224,26 @@ pub fn validate_fill_sanitized_message(
                 *source.pubkey == fill.taker_output_mint_token_account,
                 "Receiver transfer source must be the taker output token account from the fill ix"
             );
-            ensure!(*mint.pubkey == order.output_mint, "Receiver transfer mint must equal output_mint");
-            ensure!(*destination.pubkey == expected_destination, "Receiver transfer destination must be the receiver's ATA");
-            ensure!(*authority.pubkey == order.taker, "Receiver transfer authority must be the taker");
-            ensure!(amount == order.out_amount, "Receiver transfer amount must equal out_amount");
-            ensure!(decimals == order.output_decimals, "Receiver transfer decimals must equal output_decimals");
+            ensure!(
+                *mint.pubkey == order.output_mint,
+                "Receiver transfer mint must equal output_mint"
+            );
+            ensure!(
+                *destination.pubkey == expected_destination,
+                "Receiver transfer destination must be the receiver's ATA"
+            );
+            ensure!(
+                *authority.pubkey == order.taker,
+                "Receiver transfer authority must be the taker"
+            );
+            ensure!(
+                amount == order.out_amount,
+                "Receiver transfer amount must equal out_amount"
+            );
+            ensure!(
+                decimals == order.output_decimals,
+                "Receiver transfer decimals must equal output_decimals"
+            );
             transfer_ix_found = true;
         } else {
             bail!("Unexpected program id {program_id}");
@@ -765,8 +795,7 @@ mod tests {
             out_amount,
             expire_at,
         );
-        let transfer_ix =
-            solana_sdk::system_instruction::transfer(&taker, &receiver, out_amount);
+        let transfer_ix = solana_sdk::system_instruction::transfer(&taker, &receiver, out_amount);
 
         let msg = make_sanitized_transaction(
             &maker,
@@ -845,7 +874,13 @@ mod tests {
 
         let msg = make_sanitized_transaction(
             &maker,
-            &[cu_price_ix, cu_limit_ix, fill_ix, create_ata_ix, transfer_ix],
+            &[
+                cu_price_ix,
+                cu_limit_ix,
+                fill_ix,
+                create_ata_ix,
+                transfer_ix,
+            ],
             recent_blockhash,
         );
 
