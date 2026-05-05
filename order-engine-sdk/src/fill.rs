@@ -1,16 +1,23 @@
 use crate::order_engine;
 use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
-use anchor_spl::associated_token;
+use anchor_spl::{
+    associated_token::{self, get_associated_token_address_with_program_id},
+    token::{self, spl_token::instruction::TokenInstruction},
+    token_2022,
+};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use solana_sdk::{
     borsh1::try_from_slice_unchecked,
     compute_budget::{self, ComputeBudgetInstruction},
     message::SanitizedMessage,
     pubkey::Pubkey,
+    system_instruction::SystemInstruction,
+    system_program,
     sysvar::instructions::BorrowedInstruction,
 };
 
 const LIGHTHOUSE_PROGRAM_ID: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95");
+const NATIVE_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
 
 // We only allow certain instruction from the Lighthouse program.
 //
@@ -26,8 +33,16 @@ pub struct Order {
     pub out_amount: u64,
     pub output_mint: Pubkey,
     pub expire_at: i64,
+    pub receiver: Option<Pubkey>,
+    pub output_decimals: u8,
 }
 
+struct FillExtracted {
+    taker_output_mint_token_account: Pubkey,
+    output_token_program: Pubkey,
+}
+
+#[derive(Debug)]
 pub struct ValidatedFill {
     pub compute_unit_limit: u32,
     /// The maker should verify that the trade is still viable should the compute unit price change drastically
@@ -64,9 +79,12 @@ pub fn validate_fill_sanitized_message(
         "Second transaction signer is not the taker"
     );
 
+    let expected_receiver = order.receiver.filter(|r| r != &order.taker);
     let mut fill_ix_found = false;
+    let mut transfer_ix_found = false;
     let mut compute_unit_limit = None;
     let mut compute_unit_price = None;
+    let mut fill_extracted: Option<FillExtracted> = None;
 
     for BorrowedInstruction {
         program_id,
@@ -112,7 +130,7 @@ pub fn validate_fill_sanitized_message(
             );
 
             let pubkeys = accounts.into_iter().map(|a| *a.pubkey).collect::<Vec<_>>();
-            let [taker, maker, _taker_input_mint_token_account, _maker_input_mint_token_account, _taker_output_mint_token_account, _maker_output_mint_token_account, input_mint, _input_token_program, output_mint, _output_mint_token_program, ..] =
+            let [taker, maker, _taker_input_mint_token_account, _maker_input_mint_token_account, taker_output_mint_token_account, _maker_output_mint_token_account, input_mint, _input_token_program, output_mint, output_token_program, ..] =
                 pubkeys.as_slice()
             else {
                 bail!("Not enough accounts");
@@ -135,12 +153,109 @@ pub fn validate_fill_sanitized_message(
 
             // Check the expiry
             ensure!(fill_ix.expire_at == order.expire_at, "Incorrect expiry");
+
+            fill_extracted = Some(FillExtracted {
+                taker_output_mint_token_account: *taker_output_mint_token_account,
+                output_token_program: *output_token_program,
+            });
+        } else if program_id == &system_program::ID {
+            ensure!(
+                !transfer_ix_found,
+                "Duplicated receiver transfer instruction"
+            );
+            let receiver = expected_receiver.context("Unexpected transfer instruction")?;
+            ensure!(
+                order.output_mint == NATIVE_MINT,
+                "Unexpected system_program transfer for non-native output"
+            );
+            let SystemInstruction::Transfer { lamports } = bincode::deserialize(data)
+                .map_err(|e| anyhow!("Invalid system instruction: {e}"))?
+            else {
+                bail!("Unexpected system program instruction");
+            };
+            let [from, to, ..] = accounts.as_slice() else {
+                bail!("Not enough accounts in system transfer");
+            };
+            ensure!(
+                *from.pubkey == order.taker,
+                "Receiver transfer source must be taker"
+            );
+            ensure!(
+                *to.pubkey == receiver,
+                "Receiver transfer destination must be the receiver"
+            );
+            ensure!(
+                lamports == order.out_amount,
+                "Receiver transfer amount must equal out_amount"
+            );
+            transfer_ix_found = true;
+        } else if program_id == &token::ID || program_id == &token_2022::ID {
+            ensure!(
+                !transfer_ix_found,
+                "Duplicated receiver transfer instruction"
+            );
+            let receiver = expected_receiver.context("Unexpected transfer instruction")?;
+            ensure!(
+                order.output_mint != NATIVE_MINT,
+                "Unexpected SPL transfer for native SOL output"
+            );
+            let fill = fill_extracted
+                .as_ref()
+                .context("Receiver transfer must follow the fill instruction")?;
+            ensure!(
+                program_id == &fill.output_token_program,
+                "Receiver transfer token program does not match fill output token program"
+            );
+            let TokenInstruction::TransferChecked { amount, decimals } =
+                TokenInstruction::unpack(data)
+                    .map_err(|e| anyhow!("Invalid token instruction: {e}"))?
+            else {
+                bail!("Only transfer_checked is allowed from the token program");
+            };
+            let [source, mint, destination, authority, ..] = accounts.as_slice() else {
+                bail!("Not enough accounts in transfer_checked");
+            };
+            let expected_destination = get_associated_token_address_with_program_id(
+                &receiver,
+                &order.output_mint,
+                program_id,
+            );
+            ensure!(
+                *source.pubkey == fill.taker_output_mint_token_account,
+                "Receiver transfer source must be the taker output token account from the fill ix"
+            );
+            ensure!(
+                *mint.pubkey == order.output_mint,
+                "Receiver transfer mint must equal output_mint"
+            );
+            ensure!(
+                *destination.pubkey == expected_destination,
+                "Receiver transfer destination must be the receiver's ATA"
+            );
+            ensure!(
+                *authority.pubkey == order.taker,
+                "Receiver transfer authority must be the taker"
+            );
+            ensure!(
+                amount == order.out_amount,
+                "Receiver transfer amount must equal out_amount"
+            );
+            ensure!(
+                decimals == order.output_decimals,
+                "Receiver transfer decimals must equal output_decimals"
+            );
+            transfer_ix_found = true;
         } else {
             bail!("Unexpected program id {program_id}");
         }
     }
 
     ensure!(fill_ix_found, "Missing fill instruction");
+    ensure!(
+        transfer_ix_found || expected_receiver.is_none(),
+        "Missing transfer instruction for receiver"
+    );
+
     Ok(ValidatedFill {
         compute_unit_limit: compute_unit_limit.context("Missing compute unit limit")?,
         compute_unit_price: compute_unit_price.context("Missing compute unit price")?,
@@ -522,6 +637,424 @@ mod tests {
             )
             .unwrap_err()
             .to_string()
+        );
+    }
+
+    fn build_fill_ix(
+        taker: Pubkey,
+        maker: Pubkey,
+        input_mint: Pubkey,
+        output_mint: Pubkey,
+        taker_output_mint_token_account: Option<Pubkey>,
+        output_token_program: Pubkey,
+        input_amount: u64,
+        output_amount: u64,
+        expire_at: i64,
+    ) -> Instruction {
+        Instruction {
+            program_id: order_engine::ID,
+            accounts: order_engine::client::accounts::Fill {
+                taker,
+                maker,
+                taker_input_mint_token_account: Some(Pubkey::new_unique()),
+                maker_input_mint_token_account: Some(Pubkey::new_unique()),
+                taker_output_mint_token_account,
+                maker_output_mint_token_account: Some(Pubkey::new_unique()),
+                input_mint,
+                input_token_program: token::ID,
+                output_mint,
+                output_token_program,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+            data: order_engine::client::args::Fill {
+                input_amount,
+                output_amount,
+                expire_at,
+            }
+            .data(),
+        }
+    }
+
+    fn transfer_checked_ix(
+        token_program: Pubkey,
+        source: Pubkey,
+        mint: Pubkey,
+        destination: Pubkey,
+        authority: Pubkey,
+        amount: u64,
+        decimals: u8,
+    ) -> Instruction {
+        anchor_spl::token::spl_token::instruction::transfer_checked(
+            &token_program,
+            &source,
+            &mint,
+            &destination,
+            &authority,
+            &[],
+            amount,
+            decimals,
+        )
+        .unwrap()
+    }
+
+    fn cu_ixs() -> [Instruction; 2] {
+        [
+            ComputeBudgetInstruction::set_compute_unit_price(10_000),
+            ComputeBudgetInstruction::set_compute_unit_limit(200_000),
+        ]
+    }
+
+    #[test]
+    fn test_validate_fill_no_receiver() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let in_amount = 100;
+        let out_amount = 200;
+        let expire_at = 1_000;
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            in_amount,
+            out_amount,
+            expire_at,
+        );
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix],
+            recent_blockhash,
+        );
+
+        let validated = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount,
+                input_mint,
+                out_amount,
+                output_mint,
+                expire_at,
+                receiver: None,
+                output_decimals: 6,
+            },
+        )
+        .unwrap();
+        assert_eq!(validated.compute_unit_limit, 200_000);
+        assert_eq!(validated.compute_unit_price, 10_000);
+
+        // Same message but receiver == taker should also pass (treated as no receiver)
+        validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount,
+                input_mint,
+                out_amount,
+                output_mint,
+                expire_at,
+                receiver: Some(taker),
+                output_decimals: 6,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_validate_fill_with_native_sol_receiver() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let receiver = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let in_amount = 100;
+        let out_amount = 200;
+        let expire_at = 1_000;
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        // Native SOL output: taker_output_mint_token_account is None
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            NATIVE_MINT,
+            None,
+            token::ID,
+            in_amount,
+            out_amount,
+            expire_at,
+        );
+        let transfer_ix = solana_sdk::system_instruction::transfer(&taker, &receiver, out_amount);
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix, transfer_ix],
+            recent_blockhash,
+        );
+
+        validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount,
+                input_mint,
+                out_amount,
+                output_mint: NATIVE_MINT,
+                expire_at,
+                receiver: Some(receiver),
+                output_decimals: 9,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_validate_fill_with_spl_receiver() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let receiver = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let in_amount = 100;
+        let out_amount = 200;
+        let expire_at = 1_000;
+        let output_decimals = 6;
+
+        let taker_output_ata =
+            get_associated_token_address_with_program_id(&taker, &output_mint, &token::ID);
+        let receiver_output_ata =
+            get_associated_token_address_with_program_id(&receiver, &output_mint, &token::ID);
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(taker_output_ata),
+            token::ID,
+            in_amount,
+            out_amount,
+            expire_at,
+        );
+        let create_ata_ix = Instruction {
+            program_id: associated_token::ID,
+            accounts: vec![
+                AccountMeta::new(taker, true), // funder is the taker (not the maker)
+                AccountMeta::new(receiver_output_ata, false),
+                AccountMeta::new_readonly(receiver, false),
+                AccountMeta::new_readonly(output_mint, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+                AccountMeta::new_readonly(token::ID, false),
+            ],
+            data: vec![1],
+        };
+        let transfer_ix = transfer_checked_ix(
+            token::ID,
+            taker_output_ata,
+            output_mint,
+            receiver_output_ata,
+            taker,
+            out_amount,
+            output_decimals,
+        );
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[
+                cu_price_ix,
+                cu_limit_ix,
+                fill_ix,
+                create_ata_ix,
+                transfer_ix,
+            ],
+            recent_blockhash,
+        );
+
+        validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount,
+                input_mint,
+                out_amount,
+                output_mint,
+                expire_at,
+                receiver: Some(receiver),
+                output_decimals,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_missing_transfer_when_receiver_set() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let receiver = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            100,
+            200,
+            1_000,
+        );
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount: 100,
+                input_mint,
+                out_amount: 200,
+                output_mint,
+                expire_at: 1_000,
+                receiver: Some(receiver),
+                output_decimals: 6,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "Missing transfer instruction for receiver");
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_unexpected_transfer() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let receiver = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            NATIVE_MINT,
+            None,
+            token::ID,
+            100,
+            200,
+            1_000,
+        );
+        let transfer_ix = solana_sdk::system_instruction::transfer(&taker, &receiver, 200);
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix, transfer_ix],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount: 100,
+                input_mint,
+                out_amount: 200,
+                output_mint: NATIVE_MINT,
+                expire_at: 1_000,
+                receiver: None,
+                output_decimals: 9,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "Unexpected transfer instruction");
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_wrong_transfer_amount() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let receiver = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let out_amount = 200;
+
+        let taker_output_ata =
+            get_associated_token_address_with_program_id(&taker, &output_mint, &token::ID);
+        let receiver_output_ata =
+            get_associated_token_address_with_program_id(&receiver, &output_mint, &token::ID);
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(taker_output_ata),
+            token::ID,
+            100,
+            out_amount,
+            1_000,
+        );
+        // Transfer the wrong amount (out_amount - 1)
+        let transfer_ix = transfer_checked_ix(
+            token::ID,
+            taker_output_ata,
+            output_mint,
+            receiver_output_ata,
+            taker,
+            out_amount - 1,
+            6,
+        );
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix, transfer_ix],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount: 100,
+                input_mint,
+                out_amount,
+                output_mint,
+                expire_at: 1_000,
+                receiver: Some(receiver),
+                output_decimals: 6,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Receiver transfer amount must equal out_amount"
         );
     }
 }
