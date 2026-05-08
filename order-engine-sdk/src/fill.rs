@@ -968,10 +968,7 @@ mod tests {
         );
 
         // Sanity check: this transaction has 3 signers
-        assert_eq!(
-            msg.get_signature_details().num_transaction_signatures(),
-            3
-        );
+        assert_eq!(msg.get_signature_details().num_transaction_signatures(), 3);
         assert_eq!(msg.account_keys().get(0), Some(&maker));
         let signers = msg.account_keys().iter().take(3).collect::<Vec<_>>();
         assert!(signers.contains(&&taker));
