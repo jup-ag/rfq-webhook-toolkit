@@ -62,22 +62,23 @@ pub fn validate_fill_sanitized_message(
         order.maker,
     );
 
+    let num_signers = sanitized_message
+        .get_signature_details()
+        .num_transaction_signatures();
     ensure!(
-        sanitized_message
-            .get_signature_details()
-            .num_transaction_signatures()
-            >= 2,
-        "Too many signers"
+        num_signers == 2 || num_signers == 3,
+        "Expected 2 or 3 signers, got {num_signers}"
     );
 
-    let second_signer = sanitized_message
+    // 2 signers: [maker, taker]
+    // 3 signers: [maker, ata payer, taker]
+    let taker_is_signer = sanitized_message
         .account_keys()
-        .get(1)
-        .context("Missing taker")?;
-    ensure!(
-        second_signer == &order.taker,
-        "Second transaction signer is not the taker"
-    );
+        .iter()
+        .take(num_signers as usize)
+        .skip(1)
+        .any(|key| key == &order.taker);
+    ensure!(taker_is_signer, "Taker is not among the signers");
 
     let expected_receiver = order.receiver.filter(|r| r != &order.taker);
     let mut fill_ix_found = false;
@@ -899,6 +900,159 @@ mod tests {
             },
         )
         .unwrap();
+    }
+
+    #[test]
+    fn test_validate_fill_with_third_party_ata_payer() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let ata_payer = Pubkey::new_unique();
+        let receiver = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let in_amount = 100;
+        let out_amount = 200;
+        let expire_at = 1_000;
+        let output_decimals = 6;
+
+        let taker_output_ata =
+            get_associated_token_address_with_program_id(&taker, &output_mint, &token::ID);
+        let receiver_output_ata =
+            get_associated_token_address_with_program_id(&receiver, &output_mint, &token::ID);
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(taker_output_ata),
+            token::ID,
+            in_amount,
+            out_amount,
+            expire_at,
+        );
+        let create_ata_ix = Instruction {
+            program_id: associated_token::ID,
+            accounts: vec![
+                AccountMeta::new(ata_payer, true),
+                AccountMeta::new(receiver_output_ata, false),
+                AccountMeta::new_readonly(receiver, false),
+                AccountMeta::new_readonly(output_mint, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+                AccountMeta::new_readonly(token::ID, false),
+            ],
+            data: vec![1],
+        };
+        let transfer_ix = transfer_checked_ix(
+            token::ID,
+            taker_output_ata,
+            output_mint,
+            receiver_output_ata,
+            taker,
+            out_amount,
+            output_decimals,
+        );
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[
+                cu_price_ix,
+                cu_limit_ix,
+                fill_ix,
+                create_ata_ix,
+                transfer_ix,
+            ],
+            recent_blockhash,
+        );
+
+        // Sanity check: this transaction has 3 signers
+        assert_eq!(
+            msg.get_signature_details().num_transaction_signatures(),
+            3
+        );
+        assert_eq!(msg.account_keys().get(0), Some(&maker));
+        let signers = msg.account_keys().iter().take(3).collect::<Vec<_>>();
+        assert!(signers.contains(&&taker));
+        assert!(signers.contains(&&ata_payer));
+
+        validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount,
+                input_mint,
+                out_amount,
+                output_mint,
+                expire_at,
+                receiver: Some(receiver),
+                output_decimals,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_too_many_signers() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let extra_signer = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let in_amount = 100;
+        let out_amount = 200;
+        let expire_at = 1_000;
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let mut fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            in_amount,
+            out_amount,
+            expire_at,
+        );
+        // Inject a third signer
+        fill_ix.accounts.push(AccountMeta {
+            pubkey: extra_signer,
+            is_signer: true,
+            is_writable: true,
+        });
+        // Inject a fourth signer to push the total over the limit
+        fill_ix.accounts.push(AccountMeta {
+            pubkey: Pubkey::new_unique(),
+            is_signer: true,
+            is_writable: true,
+        });
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount,
+                input_mint,
+                out_amount,
+                output_mint,
+                expire_at,
+                receiver: None,
+                output_decimals: 6,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "Expected 2 or 3 signers, got 4");
     }
 
     #[test]
