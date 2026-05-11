@@ -35,13 +35,11 @@ pub use error::SquadsSdkError;
 pub use pda::{derive_settings_pda, derive_vault_pda};
 pub use settings::{parse_squads_settings, MemberPermissions, SquadsMember, SquadsSettings};
 pub use unwrap::{
-    unwrap_message, unwrap_message_with_account_keys, unwrap_transaction,
-    unwrap_transaction_base64, unwrap_transaction_base64_with_account_keys,
-    unwrap_transaction_with_account_keys, UnwrappedTransaction,
+    unwrap_message, unwrap_transaction, unwrap_transaction_base64, UnwrappedTransaction,
 };
 pub use wrap::{
-    build_squads_wrapped_transaction, build_squads_wrapped_transaction_with_alts, can_wrap,
-    wrap_quote_transaction_base64, wrap_transaction_base64, wrap_transaction_base64_with_alts,
+    build_squads_wrapped_transaction, can_wrap, wrap_quote_transaction_base64,
+    wrap_transaction_base64,
 };
 
 /// Check if a [`VersionedMessage`] contains a Squads

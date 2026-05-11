@@ -12,5 +12,4 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 solana-client = { workspace = true }
-solana-transaction-status = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

@@ -1,35 +1,25 @@
-//! Example: wrap a swap instruction through a Squads multisig, then unwrap a
-//! confirmed transaction from mainnet to inspect its inner instructions.
+//! Example: wrap a swap instruction through a Squads multisig, then unwrap it
+//! to inspect the inner instructions.
 //!
 //! Run with:
 //!   cargo run --example wrap_and_unwrap
 //!
-//! Requires mainnet RPC access (uses a real confirmed transaction).
+//! Requires mainnet RPC access (for the blockhash).
 
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::rpc_config::RpcTransactionConfig;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     instruction::{AccountMeta, Instruction},
     pubkey,
-    pubkey::Pubkey,
-    signature::Signature,
 };
-use solana_transaction_status::UiTransactionEncoding;
-use std::str::FromStr;
 
-use squads_sdk::{
-    build_squads_wrapped_transaction, unwrap_transaction, unwrap_transaction_with_account_keys,
-    SquadsWrapConfig,
-};
+use squads_sdk::{build_squads_wrapped_transaction, unwrap_transaction, SquadsWrapConfig};
 
 #[tokio::main]
 async fn main() {
-    // ── Part 1: Wrap ────────────────────────────────────────────────────
-    //
     // Take a swap instruction and wrap it so it executes through a Squads
-    // multisig vault via executeTransactionSyncV2.
-
+    // multisig vault via executeTransactionSyncV2. The output is self-contained
+    // (no address lookup tables) — anyone can verify it offline.
     let rpc = RpcClient::new("https://api.mainnet-beta.solana.com".to_string());
 
     // In production these come from your Squads multisig account on-chain.
@@ -60,15 +50,13 @@ async fn main() {
         data: vec![0xDE, 0xAD, 0xBE, 0xEF],
     };
 
-    // Get a recent blockhash from RPC (needed for the transaction message).
     let recent_blockhash = rpc
         .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())
         .await
         .expect("failed to get blockhash")
         .0;
 
-    // Wrap it. The result is a VersionedTransaction with null signatures —
-    // members sign it before submitting.
+    // Wrap it. The result has null signatures — members sign it before submitting.
     let wrapped_tx = build_squads_wrapped_transaction(
         &[swap_ix],
         &config,
@@ -78,100 +66,22 @@ async fn main() {
     )
     .expect("failed to wrap transaction");
 
-    println!("=== Wrap ===");
     println!(
-        "  signatures: {} (null until members sign)",
+        "wrapped: {} signatures (null until members sign)",
         wrapped_tx.signatures.len()
     );
 
-    // You can unwrap your own wrapped tx without ALTs (no lookup tables used).
+    // Unwrap to verify the inner instruction round-trips cleanly.
     let unwrapped = unwrap_transaction(&wrapped_tx).expect("failed to unwrap");
-    println!(
-        "  round-trip inner instructions: {}",
-        unwrapped.instructions.len()
-    );
-    println!("  inner program: {}", unwrapped.instructions[0].program_id);
-    println!("  inner data: {:?}", unwrapped.instructions[0].data);
+    let inner = &unwrapped.instructions[0];
 
-    // ── Part 2: Unwrap a real mainnet transaction (with ALTs) ───────────
-    //
-    // Real Squads transactions usually use Address Lookup Tables. To unwrap
-    // them you need the full resolved account key list from RPC.
-
-    // A real Squads-wrapped SOL→USDC swap on mainnet.
-    let tx_sig = Signature::from_str(
-        "5kdWZuVbbfY7vPFH78ueRczphwbo7c6RiywaMcwgcAZyr5ZM29jSHudZFx9VMNRLZkKCqQZWPEzd1uaPWVyyM855",
-    )
-    .unwrap();
-
-    println!("\n=== Unwrap mainnet tx ===");
-    println!("  signature: {tx_sig}");
-
-    // Fetch the confirmed transaction. maxSupportedTransactionVersion=0
-    // is required for V0 (versioned) transactions.
-    let tx_response = rpc
-        .get_transaction_with_config(
-            &tx_sig,
-            RpcTransactionConfig {
-                encoding: Some(UiTransactionEncoding::Base64),
-                commitment: Some(CommitmentConfig::confirmed()),
-                max_supported_transaction_version: Some(0),
-            },
-        )
-        .await
-        .expect("failed to fetch transaction");
-
-    // The RPC response gives us the full resolved account key list:
-    //   static keys ++ ALT writable keys ++ ALT readonly keys
-    // This is what unwrap_transaction_with_account_keys needs.
-    let ui_tx = tx_response
-        .transaction
-        .transaction
-        .decode()
-        .expect("failed to decode transaction");
-
-    let meta = tx_response
-        .transaction
-        .meta
-        .expect("transaction has no meta");
-
-    // Build the full account key list: static keys + loaded ALT addresses
-    let mut account_keys: Vec<Pubkey> = ui_tx.message.static_account_keys().to_vec();
-    if let solana_transaction_status::option_serializer::OptionSerializer::Some(loaded) =
-        meta.loaded_addresses
-    {
-        for addr in &loaded.writable {
-            account_keys.push(Pubkey::from_str(addr).expect("invalid writable ALT pubkey"));
-        }
-        for addr in &loaded.readonly {
-            account_keys.push(Pubkey::from_str(addr).expect("invalid readonly ALT pubkey"));
-        }
-    }
-
-    println!(
-        "  account keys: {} static + {} from ALTs = {} total",
-        ui_tx.message.static_account_keys().len(),
-        account_keys.len() - ui_tx.message.static_account_keys().len(),
-        account_keys.len(),
-    );
-
-    // Now unwrap with the full key list.
-    let unwrapped =
-        unwrap_transaction_with_account_keys(&ui_tx, &account_keys).expect("failed to unwrap");
-
-    println!("  settings_pda: {}", unwrapped.settings_pda);
-    println!("  members: {:?}", unwrapped.members);
-    println!("  num_signers: {}", unwrapped.num_signers);
+    println!("unwrapped:");
+    println!("  inner instructions: {}", unwrapped.instructions.len());
+    println!("  inner program:      {}", inner.program_id);
+    println!("  inner data:         {:?}", inner.data);
+    println!("  settings_pda:       {}", unwrapped.settings_pda);
+    println!("  members:            {:?}", unwrapped.members);
+    println!("  num_signers:        {}", unwrapped.num_signers);
     println!("  compute_unit_limit: {}", unwrapped.compute_unit_limit);
     println!("  compute_unit_price: {}", unwrapped.compute_unit_price);
-    println!("  inner instructions:");
-    for (i, ix) in unwrapped.instructions.iter().enumerate() {
-        println!(
-            "    ix[{}]: program={}, accounts={}, data_len={}",
-            i,
-            ix.program_id,
-            ix.accounts.len(),
-            ix.data.len(),
-        );
-    }
 }

@@ -10,6 +10,7 @@ use crate::{
     serialize::deserialize_inner_instructions,
     transaction::{
         compiled_instructions, decode_transaction_base64, extract_compute_budget_params,
+        uses_address_lookup_tables,
     },
     EXECUTE_TX_SYNC_V2_DISCRIMINATOR, SQUADS_PROGRAM_ID,
 };
@@ -31,33 +32,23 @@ pub struct UnwrappedTransaction {
     pub compute_unit_price: u64,
 }
 
-/// Unwrap a Squads V2 wrapped [`VersionedTransaction`] using the full resolved
-/// account key list.
+/// Unwrap a Squads V2 wrapped [`VersionedTransaction`] to recover the inner
+/// instructions.
 ///
-/// `account_keys` must be the complete ordered list of account pubkeys for the
-/// transaction — static keys followed by ALT-resolved writable keys then
-/// ALT-resolved readonly keys. This is the same order returned by RPC methods
-/// like `getTransaction` in the `accountKeys` field.
-///
-/// For transactions **without** address lookup tables, you can use
-/// [`unwrap_transaction`] instead, which derives the keys from the message.
-pub fn unwrap_transaction_with_account_keys(
-    tx: &VersionedTransaction,
-    account_keys: &[Pubkey],
-) -> Result<UnwrappedTransaction> {
-    unwrap_message_with_account_keys(&tx.message, account_keys)
+/// The transaction must be self-contained — if it uses address lookup tables,
+/// this returns [`SquadsSdkError::AddressLookupTablesNotSupported`].
+pub fn unwrap_transaction(tx: &VersionedTransaction) -> Result<UnwrappedTransaction> {
+    unwrap_message(&tx.message)
 }
 
-/// Unwrap a Squads V2 wrapped [`VersionedMessage`] using the full resolved
-/// account key list.
-///
-/// Behaves the same as [`unwrap_transaction_with_account_keys`] but operates
-/// directly on a [`VersionedMessage`] — useful when you have the message but
-/// not the full transaction.
-pub fn unwrap_message_with_account_keys(
-    message: &VersionedMessage,
-    account_keys: &[Pubkey],
-) -> Result<UnwrappedTransaction> {
+/// Unwrap a Squads V2 wrapped [`VersionedMessage`] to recover the inner
+/// instructions. See [`unwrap_transaction`] for details.
+pub fn unwrap_message(message: &VersionedMessage) -> Result<UnwrappedTransaction> {
+    if uses_address_lookup_tables(message) {
+        return Err(SquadsSdkError::AddressLookupTablesNotSupported);
+    }
+
+    let account_keys = message.static_account_keys();
     let instructions = compiled_instructions(message);
 
     // Find the Squads execute instruction
@@ -73,7 +64,7 @@ pub fn unwrap_message_with_account_keys(
         .ok_or(SquadsSdkError::UnrecognizedDiscriminator)?;
 
     // Parse the Squads instruction data:
-    // [disc:8][accountIndex:1][numSigners:1][padding:1][len:4][serialized_instructions...]
+    //   [disc:8][accountIndex:1][numSigners:1][padding:1][len:4][serialized_instructions...]
     let data = &squads_compiled.data;
     if data.len() < 15 {
         return Err(SquadsSdkError::ParseError(
@@ -93,11 +84,10 @@ pub fn unwrap_message_with_account_keys(
     let payload = &data[15..15 + payload_len];
 
     // The Squads instruction accounts list (from the compiled instruction):
-    // [settingsPda, SQUADS_PROGRAM_ID, ...members(numSigners reversed), ...remaining_accounts]
+    //   [settingsPda, SQUADS_PROGRAM_ID, ...members(reversed), ...remaining_accounts]
     let squads_account_indices = &squads_compiled.accounts;
     let num_signers_usize = usize::from(num_signers);
 
-    // We need at least: settingsPda + SQUADS_PROGRAM_ID + numSigners members
     let overhead = 2 + num_signers_usize;
     if squads_account_indices.len() < overhead {
         return Err(SquadsSdkError::ParseError(
@@ -105,87 +95,58 @@ pub fn unwrap_message_with_account_keys(
         ));
     }
 
-    let settings_pda_index = usize::from(squads_account_indices[0]);
-    if settings_pda_index >= account_keys.len() {
-        return Err(SquadsSdkError::ParseError(
-            "settings PDA index out of range".into(),
-        ));
-    }
-    let settings_pda = account_keys[settings_pda_index];
+    let resolve = |idx: u8| -> Result<Pubkey> {
+        let i = usize::from(idx);
+        account_keys.get(i).copied().ok_or_else(|| {
+            SquadsSdkError::ParseError(format!(
+                "account index {} out of range (total keys: {})",
+                i,
+                account_keys.len()
+            ))
+        })
+    };
 
-    // Members are at indices 2..2+numSigners (reversed from how they were prepended)
+    let settings_pda = resolve(squads_account_indices[0])?;
+
+    // Members are at indices 2..2+numSigners. They were prepended in forward order
+    // with insert(0) at wrap time, so they appear reversed — flip back.
     let mut members = Vec::with_capacity(num_signers_usize);
     for i in 0..num_signers_usize {
-        let idx = usize::from(squads_account_indices[2 + i]);
-        if idx >= account_keys.len() {
-            return Err(SquadsSdkError::ParseError(
-                "member account index out of range".into(),
-            ));
-        }
-        members.push(account_keys[idx]);
+        members.push(resolve(squads_account_indices[2 + i])?);
     }
-    // The members were prepended in forward order with insert(0), so they appear reversed.
-    // Reverse them back to original order.
     members.reverse();
 
-    // remaining_accounts start after the overhead
-    let remaining_start = overhead;
-    let remaining_account_indices = &squads_account_indices[remaining_start..];
-
-    // Resolve remaining account pubkeys from the full account key list.
-    // We derive writable status from the remaining_accounts ordering convention:
-    // writable_signers, readonly_signers, writable_non_signers, readonly_non_signers.
-    // However, since the inner serialized instructions reference these by index, we
-    // just need the pubkeys. Writable status is embedded in the remaining_accounts
-    // ordering which the Squads program uses at runtime.
-    let remaining_pubkeys: Vec<Pubkey> = remaining_account_indices
+    // remaining_accounts start after the overhead.
+    let remaining_pubkeys: Vec<Pubkey> = squads_account_indices[overhead..]
         .iter()
-        .map(|&idx| {
-            let index = usize::from(idx);
-            if index >= account_keys.len() {
-                return Err(SquadsSdkError::ParseError(format!(
-                    "remaining account index {} out of range (total keys: {})",
-                    index,
-                    account_keys.len()
-                )));
-            }
-            Ok(account_keys[index])
-        })
+        .map(|&idx| resolve(idx))
         .collect::<Result<Vec<_>>>()?;
 
-    // Deserialize the inner instructions
     let inner_instructions = deserialize_inner_instructions(payload)?;
 
-    let num_inner = inner_instructions.len();
-    let mut reconstructed = Vec::with_capacity(num_inner);
+    let mut reconstructed = Vec::with_capacity(inner_instructions.len());
     for inner in inner_instructions {
         let program_idx = usize::from(inner.program_id_index);
-        if program_idx >= remaining_pubkeys.len() {
-            return Err(SquadsSdkError::ParseError(
-                "inner instruction program index out of range".into(),
-            ));
-        }
-        let program_id = remaining_pubkeys[program_idx];
+        let program_id = *remaining_pubkeys.get(program_idx).ok_or_else(|| {
+            SquadsSdkError::ParseError("inner instruction program index out of range".into())
+        })?;
 
         let mut metas = Vec::with_capacity(inner.account_indices.len());
         for acct_idx in &inner.account_indices {
             let idx = usize::from(*acct_idx);
-            if idx >= remaining_pubkeys.len() {
-                return Err(SquadsSdkError::ParseError(
-                    "inner instruction account index out of range".into(),
-                ));
-            }
-            // We can't perfectly recover signer/writable flags for ALT-resolved
-            // accounts without the original instruction metadata. Use writable=false,
-            // signer=false as safe defaults — callers who need exact flags should
-            // compare against the original instruction set.
-            metas.push(AccountMeta::new_readonly(remaining_pubkeys[idx], false));
+            let pubkey = *remaining_pubkeys.get(idx).ok_or_else(|| {
+                SquadsSdkError::ParseError("inner instruction account index out of range".into())
+            })?;
+            // Squads wraps the vault PDA's signer flag and re-applies it at CPI time, so we
+            // can't recover the original is_signer for the vault. Return readonly/non-signer
+            // and let callers compare against the original instruction set if they need flags.
+            metas.push(AccountMeta::new_readonly(pubkey, false));
         }
 
         reconstructed.push(Instruction {
             program_id,
             accounts: metas,
-            data: inner.data, // move, no clone
+            data: inner.data,
         });
     }
 
@@ -201,44 +162,18 @@ pub fn unwrap_message_with_account_keys(
     })
 }
 
-/// Unwrap a Squads V2 wrapped [`VersionedTransaction`] to recover the inner instructions.
-///
-/// This works for Legacy messages and V0 messages **without** address lookup tables.
-/// If the transaction uses ALTs, use [`unwrap_transaction_with_account_keys`] instead,
-/// passing the full resolved account key list.
-pub fn unwrap_transaction(tx: &VersionedTransaction) -> Result<UnwrappedTransaction> {
-    unwrap_message_with_account_keys(&tx.message, tx.message.static_account_keys())
-}
-
-/// Unwrap a Squads V2 wrapped [`VersionedMessage`] to recover the inner instructions.
-pub fn unwrap_message(message: &VersionedMessage) -> Result<UnwrappedTransaction> {
-    unwrap_message_with_account_keys(message, message.static_account_keys())
-}
-
 /// Convenience wrapper that decodes a base64 transaction, then unwraps it.
 ///
-/// Only works for transactions without address lookup tables. For ALT transactions,
-/// decode manually and use [`unwrap_transaction_with_account_keys`].
+/// The transaction must be self-contained — see [`unwrap_transaction`].
 pub fn unwrap_transaction_base64(tx_b64: &str) -> Result<UnwrappedTransaction> {
     let tx = decode_transaction_base64(tx_b64)?;
     unwrap_transaction(&tx)
-}
-
-/// Convenience wrapper that decodes a base64 transaction and unwraps it using the
-/// provided full account key list (required for transactions with ALTs).
-pub fn unwrap_transaction_base64_with_account_keys(
-    tx_b64: &str,
-    account_keys: &[Pubkey],
-) -> Result<UnwrappedTransaction> {
-    let tx = decode_transaction_base64(tx_b64)?;
-    unwrap_transaction_with_account_keys(&tx, account_keys)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{config::SquadsWrapConfig, wrap::build_squads_wrapped_transaction};
-    use base64::{prelude::BASE64_STANDARD, Engine};
     use solana_sdk::{hash::Hash, pubkey};
 
     fn test_pubkeys() -> (Pubkey, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey) {
@@ -299,13 +234,11 @@ mod tests {
         // Verify we got the right number of instructions back
         assert_eq!(unwrapped.instructions.len(), original_instructions.len());
 
-        // Verify instruction data matches
+        // Verify instruction data + pubkeys match
         for (original, recovered) in original_instructions.iter().zip(&unwrapped.instructions) {
             assert_eq!(original.program_id, recovered.program_id);
             assert_eq!(original.data, recovered.data);
             assert_eq!(original.accounts.len(), recovered.accounts.len());
-
-            // Verify account pubkeys match
             for (orig_meta, rec_meta) in original.accounts.iter().zip(&recovered.accounts) {
                 assert_eq!(orig_meta.pubkey, rec_meta.pubkey);
             }
@@ -329,7 +262,6 @@ mod tests {
             signature::NullSigner,
         };
 
-        // Build a regular (non-Squads) transaction
         let payer = Pubkey::new_unique();
         let message = message::v0::Message::try_compile(
             &payer,
@@ -342,12 +274,47 @@ mod tests {
         let signer = NullSigner::new(&payer);
         let tx = VersionedTransaction::try_new(VersionedMessage::V0(message), &[&signer]).unwrap();
 
-        let result = unwrap_transaction(&tx);
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            SquadsSdkError::UnrecognizedDiscriminator => {}
-            other => panic!("expected UnrecognizedDiscriminator, got: {other}"),
-        }
+        let err = unwrap_transaction(&tx).expect_err("should reject non-Squads tx");
+        assert!(
+            matches!(err, SquadsSdkError::UnrecognizedDiscriminator),
+            "expected UnrecognizedDiscriminator, got: {err}"
+        );
+    }
+
+    #[test]
+    fn unwrap_rejects_alt_messages() {
+        use solana_sdk::{
+            address_lookup_table::AddressLookupTableAccount,
+            instruction::Instruction,
+            message::{v0::Message, VersionedMessage},
+            signature::NullSigner,
+        };
+
+        let (_settings, _vault, member_a, _member_b, swap_program, token_program, user_ata) =
+            test_pubkeys();
+
+        let alt = AddressLookupTableAccount {
+            key: Pubkey::new_unique(),
+            addresses: vec![user_ata, token_program],
+        };
+
+        // A no-op tx that uses an ALT — the unwrap path should refuse it before
+        // even looking for a Squads instruction.
+        let swap_ix = Instruction {
+            program_id: swap_program,
+            accounts: vec![AccountMeta::new_readonly(user_ata, false)],
+            data: vec![1],
+        };
+        let message =
+            Message::try_compile(&member_a, &[swap_ix], &[alt], Hash::new_unique()).unwrap();
+        let signer = NullSigner::new(&member_a);
+        let tx = VersionedTransaction::try_new(VersionedMessage::V0(message), &[&signer]).unwrap();
+
+        let err = unwrap_transaction(&tx).expect_err("should reject ALT-using tx");
+        assert!(
+            matches!(err, SquadsSdkError::AddressLookupTablesNotSupported),
+            "expected AddressLookupTablesNotSupported, got: {err}"
+        );
     }
 
     #[test]
@@ -388,116 +355,5 @@ mod tests {
         assert_eq!(unwrapped.instructions[0].accounts.len(), 2);
         assert_eq!(unwrapped.instructions[0].accounts[0].pubkey, vault);
         assert_eq!(unwrapped.instructions[0].accounts[1].pubkey, user_ata);
-    }
-
-    /// Unwrap a real mainnet Squads V2 transaction (uses ALTs).
-    /// Tx: 5kdWZuVbbfY7...M855
-    #[test]
-    fn unwrap_real_mainnet_squads_transaction() {
-        let tx_b64 = "Au2xQSHfJn+2wj2UXyVDKsh+AizyR1opKXXRmd5gIcHkEv+ods81D9/geHVaC3MuCUTXkRSeQa0oH6hj6tzr/gioy3L9eLVkKmNjxC76ExU0U/6F4boCGYbyP/3tfYHanOcGH1bWrzQotaoicmDnhGwO+CE1ycZKXxBNvxc6BsAEgAIBAwoJY8tYG0EIet8mKXQ1rq6w6WjL8PxN+YrGD0onnYB1YYCZS02zq8/l0MYlibCOwhZ7dps7kBBWnv17+5U0nSqpYfgkJBjyRmM2coxL6RzurZMdqXTFJHvNbssVIcoQcFdt+kDxUHqJnLt1p0uNFHPhdkDXx3X5S13oybOGbeiZWIJYwHQeHxkIA+r5TTIZgVN9hLL6NJ2nrAKehqGss5LXi48B75t4fM5trXbsdFwBzuw6JluEHxgKZRA10BzJ6of7fYamLwIJw6+YEL8kgnCbpH6XZgyM/EPi5Hy1vnfDHwMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABHnVW/IxwG7udMVuzmgVB/2xst6j9I5RArHNola8E48Gfpx62lotJoPJMYMsMojaWpFLHPMIFmFC+wEBb/QcQaqtnWWvxywtL+/NG9a967NTCOH4pqgLh8BenA1Gd8m2AwcABQIJ9gMABwAJAz5rCwAAAAAACR8DCQEABgIKCwQMBQ0OEQ8QEggXGBMVFBocGxkdHx4WmQFaUbtRJ0aATgACAIoAAAAEDAIAAQwAAgAAAHC0twAAAAAADQUBAA4PDAkAk/F7ZPSErnb/DSoQAAECAwQOEQ8PEg0CExAFAgYHCA4UFRYXDw8YEBkJBgMKCwoLCw8XDRovANGYU5N8/tjpD4CWmAAAAAAAwrkMAAAAAAAyAAIAAAACAAAAeQAQJwABaAEQJwECDwMBAAABAAkDKb+VBypPvwTfcXWT5zi8zCEnKBXCRxqA2fn1VbDUhCUCJzgHExIAKAEXFD3ff3ub180agM8AY10XjaJ4m10aRhU7S2DRTJaD+zJtA9nb3AXa3sTY3eMUE2FSxyhNElhHUd7cMvgUJj7rkOQzjJyWkW4i2WDHAyIdIAIjHw==";
-
-        // Full resolved account keys from RPC getTransaction response.
-        // 10 static + 8 writable ALT + 14 readonly ALT = 32 total.
-        let account_keys: Vec<Pubkey> = vec![
-            pubkey!("devpNoNn6FCTp1S2gxUFaGa9vSagrWdkUoBVyVZ7ai4"), // 0 - signer 1
-            pubkey!("9ezm3kzUXTLYXyfh5SAK4KP5dHKeQN7C1pc14rzNZA48"), // 1 - signer 2
-            pubkey!("7bS1ESnzxiCYbygf4ForuGUjUGU7uPvqTYoVz1szg6UW"), // 2
-            pubkey!("8QJmMPTmRJSLsGxjAXYDquEtWjVaKvBK8HVvV4Mcn1gB"), // 3
-            pubkey!("9mpVcDHc8CrMxdR1Lmu5A5GE3nqdfgzorZiie2LJdomQ"), // 4
-            pubkey!("APn9WAoAX6hqnkGsJyLdiYtAZxzY8Ywk1hULjVaQSauc"), // 5
-            pubkey!("HviMBVH4L84zW7xKL8oSPcDbXrjLVyRkCiYUjcVCVACE"), // 6 - vault
-            pubkey!("ComputeBudget111111111111111111111111111111"), // 7
-            pubkey!("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"), // 8
-            pubkey!("SMRTzfY6DfH5ik3TKiyLFfXexV8uSG3d2UksSCYdunG"), // 9 - Squads
-            pubkey!("2oL6my4QDDCfpgJZX1bZV1NgbmuNptKdgcE8wJm6efgk"), // 10
-            pubkey!("EpdaePzdqRkMtdZJquVPUWgyoJ5YEEpYALki6dv9VBrt"), // 11
-            pubkey!("AeanNmmxpMEcSv3a3rKaRcrPjXDwpEiG37syPRyu3VJ2"), // 12
-            pubkey!("AWKLq38dBA6JEP1bLBUrqcki3zePKNDiLX8SocMLSFMj"), // 13
-            pubkey!("Fgcod1MMhVeuMYG9zrJcnucf54U32bcEj4t8v9eiG4HJ"), // 14
-            pubkey!("2AusztjRJ2dcShL8xSUv2FrTqWbLe28UszzHptwrqh2e"), // 15
-            pubkey!("F2KCaXcp7AoQtxTDvNEDCyMyWjSCAMWNzcyN9dsPfPs5"), // 16
-            pubkey!("FnH8uVCgE8iGz4KQSEpQWdpLxzEENB2n2XHYUhUw13wc"), // 17
-            pubkey!("11111111111111111111111111111111"),            // 18
-            pubkey!("7iWnBRRhBCiNXXPhqiGzvvBkKrvFSWqqmxRyu9VyYBxE"), // 19
-            pubkey!("D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf"), // 20
-            pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"), // 21
-            pubkey!("jitodontfront11111111111JustUseJupiterU1tra"), // 22
-            pubkey!("So11111111111111111111111111111111111111112"), // 23
-            pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"), // 24
-            pubkey!("BNrK9LpEn65QA4TyBLVSMdngW3XHj3xLfFPwGdCBv8wV"), // 25
-            pubkey!("goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE"), // 26
-            pubkey!("HagefcrC63EBesXX9yFHWVscSwqu26LQtTB7RxyVSThj"), // 27
-            pubkey!("JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD"), // 28
-            pubkey!("Sysvar1nstructions1111111111111111111111111"), // 29
-            pubkey!("2naph4yYn9nF8yddV2aTjwnGuMLbUcgVX8M6B4ckezPE"), // 30
-            pubkey!("ALPHAQmeA7bjrVuccPsYPiCvsi428SNwte66Srvs4pHA"), // 31
-        ];
-
-        let tx_bytes = BASE64_STANDARD.decode(tx_b64).expect("decode base64");
-        let tx: VersionedTransaction = bincode::deserialize(&tx_bytes).expect("deserialize tx");
-
-        let unwrapped = unwrap_transaction_with_account_keys(&tx, &account_keys)
-            .expect("should unwrap real mainnet tx");
-
-        // Known signers
-        let signer_a = pubkey!("devpNoNn6FCTp1S2gxUFaGa9vSagrWdkUoBVyVZ7ai4");
-        let signer_b = pubkey!("9ezm3kzUXTLYXyfh5SAK4KP5dHKeQN7C1pc14rzNZA48");
-
-        // Vault (taker)
-        let vault = pubkey!("HviMBVH4L84zW7xKL8oSPcDbXrjLVyRkCiYUjcVCVACE");
-
-        // Verify members recovered correctly
-        assert_eq!(unwrapped.num_signers, 2);
-        assert_eq!(unwrapped.members.len(), 2);
-        assert!(
-            unwrapped.members[0] == signer_a,
-            "should contain signer devpNoNn..."
-        );
-        assert!(
-            unwrapped.members[1] == signer_b,
-            "should contain signer 9ezm3k..."
-        );
-
-        // Verify we got inner swap instructions (not empty)
-        assert!(
-            !unwrapped.instructions.is_empty(),
-            "should have inner instructions"
-        );
-
-        // The inner instructions should reference the vault as an account
-        let vault_referenced = unwrapped
-            .instructions
-            .iter()
-            .any(|ix| ix.accounts.iter().any(|meta| meta.pubkey == vault));
-        assert!(
-            vault_referenced,
-            "inner instructions should reference the vault"
-        );
-
-        // Squads program ID should NOT appear as an inner instruction program_id
-        let squads_as_inner = unwrapped
-            .instructions
-            .iter()
-            .any(|ix| ix.program_id == crate::SQUADS_PROGRAM_ID);
-        assert!(
-            !squads_as_inner,
-            "squads program should not be an inner instruction"
-        );
-
-        // Compute budget should have been extracted from outer tx
-        assert!(
-            unwrapped.compute_unit_limit > 0,
-            "should have non-zero CU limit"
-        );
-        assert!(
-            unwrapped.compute_unit_price > 0,
-            "should have non-zero CU price"
-        );
-
-        // Settings PDA — index 3 in the Squads instruction accounts
-        assert_eq!(
-            unwrapped.settings_pda,
-            pubkey!("8QJmMPTmRJSLsGxjAXYDquEtWjVaKvBK8HVvV4Mcn1gB")
-        );
     }
 }

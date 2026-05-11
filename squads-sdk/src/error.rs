@@ -12,7 +12,7 @@ pub enum SquadsSdkError {
         total: usize,
     },
 
-    #[error("wrapped transaction size ({size} bytes) exceeds {limit} byte limit; route has too many accounts for Squads wrapping without ALT support")]
+    #[error("wrapped transaction size ({size} bytes) exceeds {limit} byte limit; route has too many accounts to wrap into a self-contained transaction")]
     TransactionSizeExceeded { size: usize, limit: usize },
 
     #[error("invalid base64: {0}")]
@@ -20,6 +20,9 @@ pub enum SquadsSdkError {
 
     #[error("invalid transaction: {0}")]
     InvalidTransaction(String),
+
+    #[error("transaction uses address lookup tables; squads-sdk only supports self-contained transactions")]
+    AddressLookupTablesNotSupported,
 
     #[error("unrecognized squads instruction discriminator")]
     UnrecognizedDiscriminator,
