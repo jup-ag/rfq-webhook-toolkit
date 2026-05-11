@@ -1,6 +1,5 @@
 use base64::{prelude::BASE64_STANDARD, Engine};
 use solana_sdk::{
-    address_lookup_table::AddressLookupTableAccount,
     compute_budget,
     compute_budget::ComputeBudgetInstruction,
     hash::Hash,
@@ -18,41 +17,21 @@ use crate::{
     serialize::serialize_swap_instructions,
     transaction::{
         compiled_instructions, decode_transaction_base64, decompile_instruction,
-        extract_compute_budget_params,
+        extract_compute_budget_params, uses_address_lookup_tables,
     },
     EXECUTE_TX_SYNC_V2_DISCRIMINATOR, SQUADS_PROGRAM_ID,
 };
 
+/// Build a Squads-wrapped transaction.
+///
+/// The output is a self-contained V0 transaction with no address lookup tables,
+/// so it can be verified offline without any extra RPC fetches.
 pub fn build_squads_wrapped_transaction(
     swap_instructions: &[Instruction],
     config: &SquadsWrapConfig,
     recent_blockhash: Hash,
     compute_unit_limit: u32,
     compute_unit_price: u64,
-) -> Result<VersionedTransaction> {
-    build_squads_wrapped_transaction_with_alts(
-        swap_instructions,
-        config,
-        recent_blockhash,
-        compute_unit_limit,
-        compute_unit_price,
-        &[],
-    )
-}
-
-/// Build a Squads-wrapped transaction with Address Lookup Table support.
-///
-/// ALTs are used in the outer `VersionedMessage` only — they compress the
-/// static account keys in the serialized message. The inner serialized
-/// instructions reference accounts by index into `remaining_accounts`,
-/// which is unaffected by ALTs.
-pub fn build_squads_wrapped_transaction_with_alts(
-    swap_instructions: &[Instruction],
-    config: &SquadsWrapConfig,
-    recent_blockhash: Hash,
-    compute_unit_limit: u32,
-    compute_unit_price: u64,
-    address_lookup_tables: &[AddressLookupTableAccount],
 ) -> Result<VersionedTransaction> {
     config.validate()?;
 
@@ -120,12 +99,11 @@ pub fn build_squads_wrapped_transaction_with_alts(
             ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
             execute_ix,
         ],
-        address_lookup_tables,
+        &[], // no address lookup tables — wrapped tx must be self-contained
         recent_blockhash,
     )?;
 
     let other_signers: Vec<NullSigner> = other_signer_pubkeys.iter().map(NullSigner::new).collect();
-
     let member_signers: Vec<NullSigner> = config.members.iter().map(NullSigner::new).collect();
 
     let mut signer_refs: Vec<&NullSigner> = member_signers.iter().collect();
@@ -137,30 +115,22 @@ pub fn build_squads_wrapped_transaction_with_alts(
     )?)
 }
 
+/// Wrap a base64-encoded quote transaction into a Squads-wrapped transaction.
 pub fn wrap_transaction_base64(
     quote_tx_b64: &str,
     config: &SquadsWrapConfig,
     options: &WrapOptions,
 ) -> Result<(String, String)> {
-    wrap_transaction_base64_with_alts(quote_tx_b64, config, options, &[])
-}
-
-/// Wrap a base64-encoded transaction with ALT support.
-///
-/// Decompiles the input transaction, strips compute budget instructions,
-/// wraps the remaining instructions inside Squads `executeTransactionSyncV2`,
-/// and compresses the outer message using the provided ALTs.
-pub fn wrap_transaction_base64_with_alts(
-    quote_tx_b64: &str,
-    config: &SquadsWrapConfig,
-    options: &WrapOptions,
-    address_lookup_tables: &[AddressLookupTableAccount],
-) -> Result<(String, String)> {
     let tx = decode_transaction_base64(quote_tx_b64)?;
+
+    if uses_address_lookup_tables(&tx.message) {
+        return Err(SquadsSdkError::AddressLookupTablesNotSupported);
+    }
+
     let (cu_limit, cu_price) = extract_compute_budget_params(&tx.message)?;
     let instructions = compiled_instructions(&tx.message);
 
-    let mut swap_instructions = Vec::new();
+    let mut swap_instructions = Vec::with_capacity(instructions.len());
     for compiled in instructions {
         let ix = decompile_instruction(&tx.message, compiled)?;
         if ix.program_id != compute_budget::id() {
@@ -172,13 +142,12 @@ pub fn wrap_transaction_base64_with_alts(
         .saturating_mul(options.cu_multiplier)
         .min(options.cu_cap);
 
-    let wrapped = build_squads_wrapped_transaction_with_alts(
+    let wrapped = build_squads_wrapped_transaction(
         &swap_instructions,
         config,
         *tx.message.recent_blockhash(),
         squads_cu_limit,
         cu_price,
-        address_lookup_tables,
     )?;
 
     let wrapped_message_b64 = BASE64_STANDARD.encode(wrapped.message.serialize());
@@ -197,9 +166,7 @@ pub fn wrap_transaction_base64_with_alts(
     Ok((wrapped_tx_b64, wrapped_message_b64))
 }
 
-/// Convenience wrapper that uses default [`WrapOptions`].
-///
-/// Returns `(wrapped_tx_base64, wrapped_message_base64)`.
+/// Convenience wrapper around [`wrap_transaction_base64`] that uses default [`WrapOptions`].
 pub fn wrap_quote_transaction_base64(
     quote_tx_b64: &str,
     config: &SquadsWrapConfig,
@@ -233,17 +200,14 @@ pub fn can_wrap(
 
     let serialized = serialize_swap_instructions(swap_instructions, &remaining_accounts)?;
 
-    // Conservative size estimate (no ALT compression):
-    // signatures: 64 bytes * num_members
-    // message: header(3) + blockhash(32) + compact_array overhead(~3)
-    //   + account_keys: 32 * total unique keys
-    //   + instructions: compute budget (~20 bytes) + squads ix (15 + payload)
-    let num_keys = total_accounts + 2; // +2 for compute budget program + squads program (may overlap)
-    let estimated_size = 64 * config.members.len() // signatures
-        + 3 + 32 + 3                               // message header + blockhash + compact arrays
-        + 32 * num_keys                             // account keys (no ALT compression)
-        + 20                                        // compute budget instructions
-        + 15 + serialized.len(); // squads execute ix
+    // Conservative size estimate for a self-contained (no-ALT) transaction:
+    //   signatures: 64 bytes * num_members
+    //   message: header(3) + blockhash(32) + compact_array overhead(~3)
+    //     + account_keys: 32 * total unique keys
+    //     + instructions: compute budget (~20 bytes) + squads ix (15 + payload)
+    let num_keys = total_accounts + 2; // +2 for compute budget + squads program (may overlap)
+    let estimated_size =
+        64 * config.members.len() + 3 + 32 + 3 + 32 * num_keys + 20 + 15 + serialized.len();
 
     if estimated_size > options.tx_size_limit {
         return Err(SquadsSdkError::TransactionSizeExceeded {
@@ -330,6 +294,10 @@ mod tests {
                 assert_eq!(message.account_keys[0], member_a);
                 assert!(message.account_keys.contains(&member_b));
                 assert_eq!(message.instructions.len(), 3);
+                assert!(
+                    message.address_table_lookups.is_empty(),
+                    "wrapped tx must not use ALTs"
+                );
             }
             _ => panic!("expected v0 message"),
         }
@@ -368,8 +336,8 @@ mod tests {
                 assert_eq!(message.instructions.len(), 3);
 
                 // Verify numSigners in the execute instruction data = 3 (members.len), not 2 (threshold)
+                // data layout: [disc:8][accountIndex:1][numSigners:1][padding:1][len:4][...]
                 let execute_ix = &message.instructions[2]; // CU limit, CU price, execute
-                                                           // data layout: [disc:8][accountIndex:1][numSigners:1][padding:1][len:4][...]
                 let num_signers = execute_ix.data[9]; // offset 9 = numSigners
                 assert_eq!(
                     num_signers, 3,
@@ -456,8 +424,7 @@ mod tests {
         let err = result.unwrap_err().to_string();
         assert!(
             err.contains("64-account CPI limit"),
-            "error message should mention CPI limit, got: {}",
-            err
+            "error message should mention CPI limit, got: {err}"
         );
     }
 
@@ -596,5 +563,52 @@ mod tests {
             }
             _ => panic!("expected v0 message"),
         }
+    }
+
+    #[test]
+    fn wrap_transaction_base64_rejects_alt_transactions() {
+        use solana_sdk::{
+            address_lookup_table::AddressLookupTableAccount, message::v0::Message,
+            signature::NullSigner,
+        };
+
+        let (settings, vault, member_a, member_b, _, swap_program, token_program, user_ata) =
+            test_pubkeys();
+
+        // Build a quote transaction that references an ALT.
+        let alt_key = Pubkey::new_unique();
+        let alt = AddressLookupTableAccount {
+            key: alt_key,
+            addresses: vec![user_ata, token_program],
+        };
+
+        let payer = member_a;
+        let swap_ix = Instruction {
+            program_id: swap_program,
+            accounts: vec![
+                AccountMeta::new(vault, false),
+                AccountMeta::new(user_ata, false),
+                AccountMeta::new_readonly(token_program, false),
+            ],
+            data: vec![1],
+        };
+        let message = Message::try_compile(&payer, &[swap_ix], &[alt], Hash::new_unique()).unwrap();
+        let signer = NullSigner::new(&payer);
+        let tx = VersionedTransaction::try_new(VersionedMessage::V0(message), &[&signer]).unwrap();
+        let quote_b64 = BASE64_STANDARD.encode(bincode::serialize(&tx).unwrap());
+
+        let config = SquadsWrapConfig {
+            settings_pda: settings,
+            vault_pda: vault,
+            members: vec![member_a, member_b],
+            threshold: 2,
+        };
+
+        let err = wrap_transaction_base64(&quote_b64, &config, &WrapOptions::default())
+            .expect_err("should reject ALT-using quote");
+        assert!(
+            matches!(err, SquadsSdkError::AddressLookupTablesNotSupported),
+            "expected AddressLookupTablesNotSupported, got: {err}"
+        );
     }
 }

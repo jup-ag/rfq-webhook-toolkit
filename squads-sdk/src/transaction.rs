@@ -25,6 +25,17 @@ pub fn compiled_instructions(message: &VersionedMessage) -> &[CompiledInstructio
     }
 }
 
+/// Return true if the message references any address lookup tables.
+///
+/// `squads-sdk` only handles self-contained transactions, so callers should
+/// reject any message where this returns true.
+pub fn uses_address_lookup_tables(message: &VersionedMessage) -> bool {
+    match message {
+        VersionedMessage::V0(v0) => !v0.address_table_lookups.is_empty(),
+        VersionedMessage::Legacy(_) => false,
+    }
+}
+
 fn is_signer(message: &VersionedMessage, account_index: usize) -> bool {
     let header = message.header();
     account_index < usize::from(header.num_required_signatures)
@@ -89,8 +100,6 @@ pub fn extract_compute_budget_params(message: &VersionedMessage) -> Result<(u32,
     let mut cu_price: Option<u64> = None;
 
     for compiled in instructions {
-        // Skip instructions whose program_id resolves through ALTs (not in static keys).
-        // Compute budget instructions always use static account keys.
         let program_index = usize::from(compiled.program_id_index);
         if program_index >= account_keys.len() {
             continue;
