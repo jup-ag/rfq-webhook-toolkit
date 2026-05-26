@@ -10,6 +10,9 @@ pub struct SquadsWrapConfig {
     pub vault_pda: Pubkey,
     pub members: Vec<Pubkey>,
     pub threshold: u8,
+    /// Outer-tx fee payer override. Must be a multisig member or a signer on
+    /// the swap instructions (e.g. the RFQ maker). Defaults to `members[0]`.
+    pub fee_payer: Option<Pubkey>,
 }
 
 impl SquadsWrapConfig {
@@ -71,6 +74,7 @@ impl SquadsWrapConfig {
             vault_pda,
             members: signer_pubkeys.to_vec(),
             threshold: settings.threshold as u8,
+            fee_payer: None,
         };
         config.validate()?;
         Ok(config)

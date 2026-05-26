@@ -33,6 +33,7 @@ async fn main() {
         vault_pda,
         members: vec![member_a, member_b],
         threshold: 2,
+        fee_payer: None,
     };
 
     // Whatever swap/transfer the vault needs to execute.

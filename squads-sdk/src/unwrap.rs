@@ -218,6 +218,7 @@ mod tests {
             vault_pda: vault,
             members: vec![member_a, member_b],
             threshold: 2,
+            fee_payer: None,
         };
 
         let wrapped_tx = build_squads_wrapped_transaction(
@@ -336,6 +337,7 @@ mod tests {
             vault_pda: vault,
             members: vec![member_a, member_b],
             threshold: 2,
+            fee_payer: None,
         };
 
         let wrapped = build_squads_wrapped_transaction(
