@@ -171,6 +171,7 @@ async fn example_quote(
                 amount_out: example_quoted_amount,
                 maker: maker_pubkey,
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
+                receiver: quote_request.receiver.clone(),
             }
         }
         QuoteType::ExactOut => {
@@ -187,6 +188,7 @@ async fn example_quote(
                 amount_out: quote_request.amount.clone(),
                 maker: maker_pubkey,
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
+                receiver: quote_request.receiver.clone(),
             }
         }
     };

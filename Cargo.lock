@@ -8177,6 +8177,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "squads-sdk"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bincode",
+ "sha2 0.10.9",
+ "solana-client",
+ "solana-sdk",
+ "thiserror 2.0.12",
+ "tokio",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

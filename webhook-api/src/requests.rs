@@ -39,6 +39,10 @@ pub struct QuoteRequest {
     #[schema(examples("true", "false"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_wsol: Option<bool>,
+    /// Receiver address
+    #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receiver: Option<String>,
 }
 
 /// Order to be fulfilled by the Market Maker
