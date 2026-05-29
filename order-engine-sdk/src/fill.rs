@@ -35,6 +35,16 @@ pub struct Order {
     pub expire_at: i64,
     pub receiver: Option<Pubkey>,
     pub output_decimals: u8,
+    pub integrator_fee: Option<IntegratorFeeExpectation>,
+}
+
+/// Describes the integrator-fee transfer the validator should expect in the fill transaction.
+#[derive(Debug, Clone)]
+pub struct IntegratorFeeExpectation {
+    /// Integrator's token account receiving the fee.
+    pub destination: Pubkey,
+    /// Exact units transferred to the integrator.
+    pub fee_amount: u64,
 }
 
 struct FillExtracted {
@@ -45,8 +55,6 @@ struct FillExtracted {
 #[derive(Debug)]
 pub struct ValidatedFill {
     pub compute_unit_limit: u32,
-    /// The maker should verify that the trade is still viable should the compute unit price change drastically
-    /// The compute unit price might change from the original tx as wallets tend to mutate it
     pub compute_unit_price: u64,
 }
 
@@ -81,8 +89,12 @@ pub fn validate_fill_sanitized_message(
     ensure!(taker_is_signer, "Taker is not among the signers");
 
     let expected_receiver = order.receiver.filter(|r| r != &order.taker);
+    let expected_integrator = order.integrator_fee.as_ref();
     let mut fill_ix_found = false;
-    let mut transfer_ix_found = false;
+    let mut receiver_transfer_found = false;
+    let mut integrator_fee_validated = false;
+    let mut integrator_used_native_path = false;
+    let mut integrator_sync_native_validated = false;
     let mut compute_unit_limit = None;
     let mut compute_unit_price = None;
     let mut fill_extracted: Option<FillExtracted> = None;
@@ -160,15 +172,6 @@ pub fn validate_fill_sanitized_message(
                 output_token_program: *output_token_program,
             });
         } else if program_id == &system_program::ID {
-            ensure!(
-                !transfer_ix_found,
-                "Duplicated receiver transfer instruction"
-            );
-            let receiver = expected_receiver.context("Unexpected transfer instruction")?;
-            ensure!(
-                order.output_mint == NATIVE_MINT,
-                "Unexpected system_program transfer for non-native output"
-            );
             let SystemInstruction::Transfer { lamports } = bincode::deserialize(data)
                 .map_err(|e| anyhow!("Invalid system instruction: {e}"))?
             else {
@@ -177,75 +180,144 @@ pub fn validate_fill_sanitized_message(
             let [from, to, ..] = accounts.as_slice() else {
                 bail!("Not enough accounts in system transfer");
             };
+
             ensure!(
                 *from.pubkey == order.taker,
-                "Receiver transfer source must be taker"
+                "System transfer source must be taker"
             );
-            ensure!(
-                *to.pubkey == receiver,
-                "Receiver transfer destination must be the receiver"
-            );
-            ensure!(
-                lamports == order.out_amount,
-                "Receiver transfer amount must equal out_amount"
-            );
-            transfer_ix_found = true;
+
+            let is_integrator_transfer = expected_integrator
+                .map(|i| *to.pubkey == i.destination)
+                .unwrap_or(false);
+            if is_integrator_transfer {
+                let integrator = expected_integrator.expect("checked just above");
+                ensure!(
+                    !integrator_fee_validated,
+                    "Duplicated integrator-fee transfer"
+                );
+                ensure!(
+                    lamports == integrator.fee_amount,
+                    "Integrator-fee transfer amount must equal expected fee"
+                );
+                integrator_fee_validated = true;
+                integrator_used_native_path = true;
+            } else {
+                ensure!(
+                    !receiver_transfer_found,
+                    "Duplicated receiver transfer instruction"
+                );
+                let receiver = expected_receiver.context("Unexpected transfer instruction")?;
+                ensure!(
+                    order.output_mint == NATIVE_MINT,
+                    "Unexpected system_program transfer for non-native output"
+                );
+                ensure!(
+                    *to.pubkey == receiver,
+                    "Receiver transfer destination must be the receiver"
+                );
+                ensure!(
+                    lamports == order.out_amount,
+                    "Receiver transfer amount must equal out_amount"
+                );
+                receiver_transfer_found = true;
+            }
         } else if program_id == &token::ID || program_id == &token_2022::ID {
-            ensure!(
-                !transfer_ix_found,
-                "Duplicated receiver transfer instruction"
-            );
-            let receiver = expected_receiver.context("Unexpected transfer instruction")?;
-            ensure!(
-                order.output_mint != NATIVE_MINT,
-                "Unexpected SPL transfer for native SOL output"
-            );
-            let fill = fill_extracted
-                .as_ref()
-                .context("Receiver transfer must follow the fill instruction")?;
-            ensure!(
-                program_id == &fill.output_token_program,
-                "Receiver transfer token program does not match fill output token program"
-            );
-            let TokenInstruction::TransferChecked { amount, decimals } =
-                TokenInstruction::unpack(data)
-                    .map_err(|e| anyhow!("Invalid token instruction: {e}"))?
-            else {
-                bail!("Only transfer_checked is allowed from the token program");
-            };
-            let [source, mint, destination, authority, ..] = accounts.as_slice() else {
-                bail!("Not enough accounts in transfer_checked");
-            };
-            let expected_destination = get_associated_token_address_with_program_id(
-                &receiver,
-                &order.output_mint,
-                program_id,
-            );
-            ensure!(
-                *source.pubkey == fill.taker_output_mint_token_account,
-                "Receiver transfer source must be the taker output token account from the fill ix"
-            );
-            ensure!(
-                *mint.pubkey == order.output_mint,
-                "Receiver transfer mint must equal output_mint"
-            );
-            ensure!(
-                *destination.pubkey == expected_destination,
-                "Receiver transfer destination must be the receiver's ATA"
-            );
-            ensure!(
-                *authority.pubkey == order.taker,
-                "Receiver transfer authority must be the taker"
-            );
-            ensure!(
-                amount == order.out_amount,
-                "Receiver transfer amount must equal out_amount"
-            );
-            ensure!(
-                decimals == order.output_decimals,
-                "Receiver transfer decimals must equal output_decimals"
-            );
-            transfer_ix_found = true;
+            let token_ix = TokenInstruction::unpack(data)
+                .map_err(|e| anyhow!("Invalid token instruction: {e}"))?;
+            match token_ix {
+                TokenInstruction::SyncNative => {
+                    let integrator =
+                        expected_integrator.context("Unexpected sync_native instruction")?;
+                    let [account, ..] = accounts.as_slice() else {
+                        bail!("Not enough accounts in sync_native");
+                    };
+                    ensure!(
+                        *account.pubkey == integrator.destination,
+                        "sync_native must target the integrator destination"
+                    );
+                    ensure!(
+                        !integrator_sync_native_validated,
+                        "Duplicated sync_native instruction"
+                    );
+                    integrator_sync_native_validated = true;
+                }
+                TokenInstruction::TransferChecked { amount, decimals } => {
+                    let [source, mint, destination, authority, ..] = accounts.as_slice() else {
+                        bail!("Not enough accounts in transfer_checked");
+                    };
+                    let is_integrator_transfer = expected_integrator
+                        .map(|i| *destination.pubkey == i.destination)
+                        .unwrap_or(false);
+                    if is_integrator_transfer {
+                        let integrator = expected_integrator.expect("checked just above");
+                        ensure!(
+                            !integrator_fee_validated,
+                            "Duplicated integrator-fee transfer"
+                        );
+                        ensure!(
+                            *authority.pubkey == order.taker,
+                            "Integrator-fee transfer authority must be the taker"
+                        );
+                        ensure!(
+                            amount == integrator.fee_amount,
+                            "Integrator-fee transfer amount must equal expected fee"
+                        );
+                        integrator_fee_validated = true;
+                    } else {
+                        // Receiver-ATA transfer — existing logic.
+                        ensure!(
+                            !receiver_transfer_found,
+                            "Duplicated receiver transfer instruction"
+                        );
+                        let receiver =
+                            expected_receiver.context("Unexpected transfer instruction")?;
+                        ensure!(
+                            order.output_mint != NATIVE_MINT,
+                            "Unexpected SPL transfer for native SOL output"
+                        );
+                        let fill = fill_extracted
+                            .as_ref()
+                            .context("Receiver transfer must follow the fill instruction")?;
+                        ensure!(
+                            program_id == &fill.output_token_program,
+                            "Receiver transfer token program does not match fill output token program"
+                        );
+                        let expected_destination = get_associated_token_address_with_program_id(
+                            &receiver,
+                            &order.output_mint,
+                            program_id,
+                        );
+                        ensure!(
+                            *source.pubkey == fill.taker_output_mint_token_account,
+                            "Receiver transfer source must be the taker output token account from the fill ix"
+                        );
+                        ensure!(
+                            *mint.pubkey == order.output_mint,
+                            "Receiver transfer mint must equal output_mint"
+                        );
+                        ensure!(
+                            *destination.pubkey == expected_destination,
+                            "Receiver transfer destination must be the receiver's ATA"
+                        );
+                        ensure!(
+                            *authority.pubkey == order.taker,
+                            "Receiver transfer authority must be the taker"
+                        );
+                        ensure!(
+                            amount == order.out_amount,
+                            "Receiver transfer amount must equal out_amount"
+                        );
+                        ensure!(
+                            decimals == order.output_decimals,
+                            "Receiver transfer decimals must equal output_decimals"
+                        );
+                        receiver_transfer_found = true;
+                    }
+                }
+                _ => {
+                    bail!("Only transfer_checked or sync_native are allowed from the token program")
+                }
+            }
         } else {
             bail!("Unexpected program id {program_id}");
         }
@@ -253,9 +325,21 @@ pub fn validate_fill_sanitized_message(
 
     ensure!(fill_ix_found, "Missing fill instruction");
     ensure!(
-        transfer_ix_found || expected_receiver.is_none(),
+        receiver_transfer_found || expected_receiver.is_none(),
         "Missing transfer instruction for receiver"
     );
+    if expected_integrator.is_some() {
+        ensure!(
+            integrator_fee_validated,
+            "Missing integrator-fee transfer instruction"
+        );
+        if integrator_used_native_path {
+            ensure!(
+                integrator_sync_native_validated,
+                "Missing sync_native after native-SOL integrator-fee transfer"
+            );
+        }
+    }
 
     Ok(ValidatedFill {
         compute_unit_limit: compute_unit_limit.context("Missing compute unit limit")?,
@@ -748,6 +832,7 @@ mod tests {
                 expire_at,
                 receiver: None,
                 output_decimals: 6,
+                integrator_fee: None,
             },
         )
         .unwrap();
@@ -767,6 +852,7 @@ mod tests {
                 expire_at,
                 receiver: Some(taker),
                 output_decimals: 6,
+                integrator_fee: None,
             },
         )
         .unwrap();
@@ -816,6 +902,7 @@ mod tests {
                 expire_at,
                 receiver: Some(receiver),
                 output_decimals: 9,
+                integrator_fee: None,
             },
         )
         .unwrap();
@@ -897,6 +984,7 @@ mod tests {
                 expire_at,
                 receiver: Some(receiver),
                 output_decimals,
+                integrator_fee: None,
             },
         )
         .unwrap();
@@ -986,6 +1074,7 @@ mod tests {
                 expire_at,
                 receiver: Some(receiver),
                 output_decimals,
+                integrator_fee: None,
             },
         )
         .unwrap();
@@ -1046,6 +1135,7 @@ mod tests {
                 expire_at,
                 receiver: None,
                 output_decimals: 6,
+                integrator_fee: None,
             },
         )
         .unwrap_err();
@@ -1092,6 +1182,7 @@ mod tests {
                 expire_at: 1_000,
                 receiver: Some(receiver),
                 output_decimals: 6,
+                integrator_fee: None,
             },
         )
         .unwrap_err();
@@ -1138,6 +1229,7 @@ mod tests {
                 expire_at: 1_000,
                 receiver: None,
                 output_decimals: 9,
+                integrator_fee: None,
             },
         )
         .unwrap_err();
@@ -1200,6 +1292,7 @@ mod tests {
                 expire_at: 1_000,
                 receiver: Some(receiver),
                 output_decimals: 6,
+                integrator_fee: None,
             },
         )
         .unwrap_err();
@@ -1207,5 +1300,366 @@ mod tests {
             err.to_string(),
             "Receiver transfer amount must equal out_amount"
         );
+    }
+
+    // ── integrator-fee validation ────────────────────────────────────────────────────────
+
+    fn sync_native_ix(account: Pubkey) -> Instruction {
+        anchor_spl::token::spl_token::instruction::sync_native(&token::ID, &account).unwrap()
+    }
+
+    fn system_transfer_ix(from: Pubkey, to: Pubkey, lamports: u64) -> Instruction {
+        solana_sdk::system_instruction::transfer(&from, &to, lamports)
+    }
+
+    #[test]
+    fn test_validate_fill_with_native_integrator_fee() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let in_amount = 100;
+        let out_amount = 200;
+        let expire_at = 1_000;
+        let integrator_destination = Pubkey::new_unique();
+        let fee_amount = 1_000;
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            in_amount,
+            out_amount,
+            expire_at,
+        );
+        let fee_transfer = system_transfer_ix(taker, integrator_destination, fee_amount);
+        let sync_native = sync_native_ix(integrator_destination);
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix, fee_transfer, sync_native],
+            recent_blockhash,
+        );
+
+        validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount,
+                input_mint,
+                out_amount,
+                output_mint,
+                expire_at,
+                receiver: None,
+                output_decimals: 6,
+                integrator_fee: Some(IntegratorFeeExpectation {
+                    destination: integrator_destination,
+                    fee_amount,
+                }),
+            },
+        )
+        .expect("native-SOL integrator fee + sync_native must validate");
+    }
+
+    #[test]
+    fn test_validate_fill_with_spl_integrator_fee_and_receiver() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let receiver = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let in_amount = 100;
+        let out_amount = 200;
+        let expire_at = 1_000;
+        let output_decimals = 6;
+        let taker_output_ata = Pubkey::new_unique();
+        let receiver_output_ata =
+            get_associated_token_address_with_program_id(&receiver, &output_mint, &token::ID);
+        let taker_input_ata = Pubkey::new_unique();
+        let integrator_destination = Pubkey::new_unique();
+        let fee_amount = 50;
+        let fee_decimals = 6;
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(taker_output_ata),
+            token::ID,
+            in_amount,
+            out_amount,
+            expire_at,
+        );
+        let integrator_transfer = transfer_checked_ix(
+            token::ID,
+            taker_input_ata,
+            input_mint,
+            integrator_destination,
+            taker,
+            fee_amount,
+            fee_decimals,
+        );
+        let receiver_transfer = transfer_checked_ix(
+            token::ID,
+            taker_output_ata,
+            output_mint,
+            receiver_output_ata,
+            taker,
+            out_amount,
+            output_decimals,
+        );
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[
+                cu_price_ix,
+                cu_limit_ix,
+                fill_ix,
+                integrator_transfer,
+                receiver_transfer,
+            ],
+            recent_blockhash,
+        );
+
+        validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount,
+                input_mint,
+                out_amount,
+                output_mint,
+                expire_at,
+                receiver: Some(receiver),
+                output_decimals,
+                integrator_fee: Some(IntegratorFeeExpectation {
+                    destination: integrator_destination,
+                    fee_amount,
+                }),
+            },
+        )
+        .expect("SPL integrator fee + receiver transfer must validate");
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_missing_integrator_fee_transfer() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let integrator_destination = Pubkey::new_unique();
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            100,
+            200,
+            1_000,
+        );
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount: 100,
+                input_mint,
+                out_amount: 200,
+                output_mint,
+                expire_at: 1_000,
+                receiver: None,
+                output_decimals: 6,
+                integrator_fee: Some(IntegratorFeeExpectation {
+                    destination: integrator_destination,
+                    fee_amount: 1_000,
+                }),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Missing integrator-fee transfer instruction"
+        );
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_missing_sync_native() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let integrator_destination = Pubkey::new_unique();
+        let fee_amount = 1_000;
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            100,
+            200,
+            1_000,
+        );
+        let fee_transfer = system_transfer_ix(taker, integrator_destination, fee_amount);
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix, fee_transfer],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount: 100,
+                input_mint,
+                out_amount: 200,
+                output_mint,
+                expire_at: 1_000,
+                receiver: None,
+                output_decimals: 6,
+                integrator_fee: Some(IntegratorFeeExpectation {
+                    destination: integrator_destination,
+                    fee_amount,
+                }),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Missing sync_native after native-SOL integrator-fee transfer"
+        );
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_wrong_integrator_fee_amount() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let integrator_destination = Pubkey::new_unique();
+        let expected_fee = 1_000;
+        let actual_lamports = 999;
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            100,
+            200,
+            1_000,
+        );
+        let fee_transfer = system_transfer_ix(taker, integrator_destination, actual_lamports);
+        let sync_native = sync_native_ix(integrator_destination);
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix, fee_transfer, sync_native],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount: 100,
+                input_mint,
+                out_amount: 200,
+                output_mint,
+                expire_at: 1_000,
+                receiver: None,
+                output_decimals: 6,
+                integrator_fee: Some(IntegratorFeeExpectation {
+                    destination: integrator_destination,
+                    fee_amount: expected_fee,
+                }),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Integrator-fee transfer amount must equal expected fee"
+        );
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_unexpected_sync_native() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let rogue_account = Pubkey::new_unique();
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            100,
+            200,
+            1_000,
+        );
+        let sync_native = sync_native_ix(rogue_account);
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix, sync_native],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount: 100,
+                input_mint,
+                out_amount: 200,
+                output_mint,
+                expire_at: 1_000,
+                receiver: None,
+                output_decimals: 6,
+                integrator_fee: None,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "Unexpected sync_native instruction");
     }
 }
