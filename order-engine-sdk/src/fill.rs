@@ -236,6 +236,10 @@ pub fn validate_fill_sanitized_message(
                         "sync_native must target the integrator destination"
                     );
                     ensure!(
+                        integrator_used_native_path,
+                        "sync_native must come after the native-SOL integrator-fee transfer"
+                    );
+                    ensure!(
                         !integrator_sync_native_validated,
                         "Duplicated sync_native instruction"
                     );
@@ -1661,5 +1665,134 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err.to_string(), "Unexpected sync_native instruction");
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_sync_native_before_native_transfer() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let integrator_destination = Pubkey::new_unique();
+        let fee_amount = 1_000;
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            100,
+            200,
+            1_000,
+        );
+        let fee_transfer = system_transfer_ix(taker, integrator_destination, fee_amount);
+        let sync_native = sync_native_ix(integrator_destination);
+
+        // sync_native FIRST, then the system transfer.
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[cu_price_ix, cu_limit_ix, fill_ix, sync_native, fee_transfer],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount: 100,
+                input_mint,
+                out_amount: 200,
+                output_mint,
+                expire_at: 1_000,
+                receiver: None,
+                output_decimals: 6,
+                integrator_fee: Some(IntegratorFeeExpectation {
+                    destination: integrator_destination,
+                    fee_amount,
+                }),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "sync_native must come after the native-SOL integrator-fee transfer"
+        );
+    }
+
+    #[test]
+    fn test_validate_fill_rejects_sync_native_with_spl_path() {
+        let taker = Pubkey::new_unique();
+        let maker = Pubkey::new_unique();
+        let input_mint = Pubkey::new_unique();
+        let output_mint = Pubkey::new_unique();
+        let recent_blockhash = Hash::new_unique();
+        let taker_input_ata = Pubkey::new_unique();
+        let integrator_destination = Pubkey::new_unique();
+        let fee_amount = 50;
+        let fee_decimals = 6;
+
+        let [cu_price_ix, cu_limit_ix] = cu_ixs();
+        let fill_ix = build_fill_ix(
+            taker,
+            maker,
+            input_mint,
+            output_mint,
+            Some(Pubkey::new_unique()),
+            token::ID,
+            100,
+            200,
+            1_000,
+        );
+        let integrator_transfer = transfer_checked_ix(
+            token::ID,
+            taker_input_ata,
+            input_mint,
+            integrator_destination,
+            taker,
+            fee_amount,
+            fee_decimals,
+        );
+        let sync_native = sync_native_ix(integrator_destination);
+
+        let msg = make_sanitized_transaction(
+            &maker,
+            &[
+                cu_price_ix,
+                cu_limit_ix,
+                fill_ix,
+                integrator_transfer,
+                sync_native,
+            ],
+            recent_blockhash,
+        );
+
+        let err = validate_fill_sanitized_message(
+            &msg,
+            Order {
+                taker,
+                maker,
+                in_amount: 100,
+                input_mint,
+                out_amount: 200,
+                output_mint,
+                expire_at: 1_000,
+                receiver: None,
+                output_decimals: 6,
+                integrator_fee: Some(IntegratorFeeExpectation {
+                    destination: integrator_destination,
+                    fee_amount,
+                }),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "sync_native must come after the native-SOL integrator-fee transfer"
+        );
     }
 }
