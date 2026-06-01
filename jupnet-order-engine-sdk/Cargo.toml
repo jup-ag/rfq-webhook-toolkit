@@ -1,0 +1,16 @@
+[package]
+name = "jupnet-order-engine-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "Maker-side validation library for the Jupnet order-engine program"
+
+[dependencies]
+jupnet-sdk = { git = "https://github.com/jupnet/jupnet-sdk.git", rev = "1bf1947d4babbc43b2538a1cc39201fdd8548a5c", package = "solana-sdk" }
+jupnet-sdk-ids = { git = "https://github.com/jupnet/jupnet-sdk.git", rev = "1bf1947d4babbc43b2538a1cc39201fdd8548a5c", package = "solana-sdk-ids" }
+jupnet-system-interface = { git = "https://github.com/jupnet/jupnet-sdk.git", rev = "1bf1947d4babbc43b2538a1cc39201fdd8548a5c", package = "solana-system-interface", features = ["bincode"] }
+jupnet-compute-budget-interface = { git = "https://github.com/jupnet/jupnet-sdk.git", rev = "1bf1947d4babbc43b2538a1cc39201fdd8548a5c", package = "solana-compute-budget-interface", features = ["borsh"] }
+
+# Same off-the-shelf utilities the legacy SDK uses.
+base64 = "0.22"
+bincode = "1.3"
+anyhow = "1"

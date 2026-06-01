@@ -1,0 +1,35 @@
+[package]
+name = "jupnet-order-engine"
+version = "0.1.0"
+description = "Jupnet RFQ order-engine program (Pinocchio-based)"
+edition = { workspace = true }
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "jupnet_order_engine"
+
+[features]
+default = []
+# Enable on `cargo build-sbf` to emit the on-chain program entrypoint, allocator
+# and panic handler. Tests / clients that link the crate as a library should not
+# enable this so they avoid duplicate symbols.
+bpf-entrypoint = []
+production = []
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    'cfg(target_os, values("solana"))',
+]
+
+[dependencies]
+pinocchio = "0.8"
+pinocchio-pubkey = "0.2"
+pinocchio-system = "0.2"
+pinocchio-token = "0.3"
+
+# Tests are run on-chain against the deployed program on Jupnet devnet via the
+# `jupnet-mint` workspace (`cargo run --bin jupnet-do-fill ...`). No local
+# `solana-program-test` harness lives here because the upstream SPL Token
+# program in that crate uses u64 amounts, incompatible with Jupnet's 32-byte
+# amount wire format.

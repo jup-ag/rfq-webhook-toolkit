@@ -1,5 +1,7 @@
 [workspace]
 members = ["server-example", "webhook-api", "programs/*", "order-engine-sdk", "squads-sdk"]
+
+exclude = ["jupnet-order-engine-sdk"]
 resolver = "2"
 
 [workspace.package]
