@@ -1,23 +1,84 @@
-use anchor_lang::{prelude::*, solana_program::program_pack::Pack, system_program};
+use anchor_lang::{
+    prelude::*,
+    solana_program::program::{invoke, invoke_signed},
+    system_program,
+};
 use anchor_spl::{
-    associated_token::spl_associated_token_account::tools::account::create_pda_account,
-    token::{
-        self,
-        spl_token::{self, native_mint},
-    },
+    token::{self},
     token_interface::{self, spl_pod::primitives::PodU16, TokenAccount, TokenInterface},
 };
-use spl_token_2022::{
-    self,
+use solana_program_pack::Pack;
+use solana_system_interface::instruction as system_instruction;
+use spl_token_2022_interface::{
+    self as spl_token_2022,
     extension::{transfer_fee::TransferFeeConfig, BaseStateWithExtensions, StateWithExtensions},
 };
+use spl_token_interface::{self as spl_token, native_mint};
 
 use crate::error::OrderEngineError;
 
 pub const TEMPORARY_WSOL_TOKEN_ACCOUNT: &[u8] = b"temporary-wsol-token-account";
 
-pub fn handle_fill<'c: 'info, 'info>(
-    ctx: Context<'_, '_, 'c, 'info, Fill<'info>>,
+fn create_pda_account<'info>(
+    payer: &AccountInfo<'info>,
+    rent: &Rent,
+    space: usize,
+    owner: &Pubkey,
+    system_program: &AccountInfo<'info>,
+    new_pda_account: &AccountInfo<'info>,
+    new_pda_signer_seeds: &[&[u8]],
+) -> Result<()> {
+    if new_pda_account.lamports() > 0 {
+        let required_lamports = rent
+            .minimum_balance(space)
+            .max(1)
+            .saturating_sub(new_pda_account.lamports());
+
+        if required_lamports > 0 {
+            invoke(
+                &system_instruction::transfer(payer.key, new_pda_account.key, required_lamports),
+                &[
+                    payer.clone(),
+                    new_pda_account.clone(),
+                    system_program.clone(),
+                ],
+            )?;
+        }
+
+        invoke_signed(
+            &system_instruction::allocate(new_pda_account.key, space as u64),
+            &[new_pda_account.clone(), system_program.clone()],
+            &[new_pda_signer_seeds],
+        )?;
+
+        invoke_signed(
+            &system_instruction::assign(new_pda_account.key, owner),
+            &[new_pda_account.clone(), system_program.clone()],
+            &[new_pda_signer_seeds],
+        )?;
+    } else {
+        invoke_signed(
+            &system_instruction::create_account(
+                payer.key,
+                new_pda_account.key,
+                rent.minimum_balance(space).max(1),
+                space as u64,
+                owner,
+            ),
+            &[
+                payer.clone(),
+                new_pda_account.clone(),
+                system_program.clone(),
+            ],
+            &[new_pda_signer_seeds],
+        )?;
+    }
+
+    Ok(())
+}
+
+pub fn handle_fill<'info>(
+    ctx: Context<'info, Fill<'info>>,
     input_amount: u64,
     output_amount: u64,
     expire_at: i64,
@@ -33,7 +94,7 @@ pub fn handle_fill<'c: 'info, 'info>(
 
             system_program::transfer(
                 CpiContext::new(
-                    ctx.accounts.system_program.to_account_info(),
+                    ctx.accounts.system_program.key(),
                     system_program::Transfer {
                         from: ctx.accounts.taker.to_account_info(),
                         to: ctx.accounts.maker.to_account_info(),
@@ -47,7 +108,7 @@ pub fn handle_fill<'c: 'info, 'info>(
 
             system_program::transfer(
                 CpiContext::new(
-                    ctx.accounts.system_program.to_account_info(),
+                    ctx.accounts.system_program.key(),
                     system_program::Transfer {
                         from: ctx.accounts.taker.to_account_info(),
                         to: maker_input_mint_token_account.to_account_info(),
@@ -56,7 +117,7 @@ pub fn handle_fill<'c: 'info, 'info>(
                 input_amount,
             )?;
             token::sync_native(CpiContext::new(
-                ctx.accounts.input_token_program.to_account_info(),
+                ctx.accounts.input_token_program.key(),
                 token::SyncNative {
                     account: maker_input_mint_token_account.to_account_info(),
                 },
@@ -96,7 +157,7 @@ pub fn handle_fill<'c: 'info, 'info>(
 
             system_program::transfer(
                 CpiContext::new(
-                    ctx.accounts.system_program.to_account_info(),
+                    ctx.accounts.system_program.key(),
                     system_program::Transfer {
                         from: ctx.accounts.maker.to_account_info(),
                         to: ctx.accounts.taker.to_account_info(),
@@ -125,7 +186,7 @@ pub fn handle_fill<'c: 'info, 'info>(
 
             system_program::transfer(
                 CpiContext::new(
-                    ctx.accounts.system_program.to_account_info(),
+                    ctx.accounts.system_program.key(),
                     system_program::Transfer {
                         from: ctx.accounts.maker.to_account_info(),
                         to: taker_output_mint_token_account.to_account_info(),
@@ -134,7 +195,7 @@ pub fn handle_fill<'c: 'info, 'info>(
                 output_amount,
             )?;
             token::sync_native(CpiContext::new(
-                ctx.accounts.output_token_program.to_account_info(),
+                ctx.accounts.output_token_program.key(),
                 token::SyncNative {
                     account: taker_output_mint_token_account.to_account_info(),
                 },
@@ -186,7 +247,7 @@ fn transfer<'info>(
     match decimals_for_transfer_checked {
         Some(decimals) => token_interface::transfer_checked(
             CpiContext::new(
-                token_program,
+                *token_program.key,
                 token_interface::TransferChecked {
                     from,
                     mint,
@@ -199,7 +260,7 @@ fn transfer<'info>(
         ),
         None => token::transfer(
             CpiContext::new(
-                token_program,
+                *token_program.key,
                 token::Transfer {
                     from,
                     to,
@@ -289,7 +350,7 @@ fn unwrap_sol<'info>(
         new_pda_signer_seeds,
     )?;
     token::initialize_account3(CpiContext::new(
-        token_program.to_account_info(),
+        *token_program.key,
         token::InitializeAccount3 {
             account: temporary_wsol_token_account.clone(),
             mint: wsol_mint,
@@ -299,7 +360,7 @@ fn unwrap_sol<'info>(
 
     token::transfer(
         CpiContext::new(
-            token_program.clone(),
+            *token_program.key,
             token::Transfer {
                 from: sender_token_account.clone(),
                 to: temporary_wsol_token_account.clone(),
@@ -311,7 +372,7 @@ fn unwrap_sol<'info>(
 
     // Close temporary wsol token account into the maker
     token::close_account(CpiContext::new(
-        token_program.to_account_info(),
+        *token_program.key,
         token::CloseAccount {
             account: temporary_wsol_token_account.clone(),
             destination: maker.clone(),
@@ -323,7 +384,7 @@ fn unwrap_sol<'info>(
         // Transfer native sol to receipient
         system_program::transfer(
             CpiContext::new(
-                system_program,
+                *system_program.key,
                 system_program::Transfer {
                     from: maker,
                     to: receiver,

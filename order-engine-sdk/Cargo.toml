@@ -3,11 +3,30 @@ name = "order-engine-sdk"
 version = "0.1.0"
 edition.workspace = true
 
+[features]
+idl-build = ["anchor-lang/idl-build"]
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    'cfg(target_os, values("solana"))',
+]
+
 [dependencies]
 anchor-lang = { workspace = true }
-anchor-spl = { workspace = true }
-solana-sdk = { workspace = true }
-agave-reserved-account-keys = "~2"
+solana-borsh = { workspace = true }
+solana-compute-budget-interface = { workspace = true }
+solana-instruction = { workspace = true }
+solana-message = { workspace = true }
+solana-system-interface = { workspace = true }
+solana-transaction = { workspace = true }
+spl-associated-token-account-interface = { workspace = true }
+spl-token-interface = { workspace = true }
+spl-token-2022-interface = { workspace = true }
+agave-reserved-account-keys = { version = "4.1.2", features = ["agave-unstable-api"] }
 base64 = { workspace = true }
 bincode = { workspace = true }
 anyhow = { workspace = true }
+
+[dev-dependencies]
+solana-hash = { workspace = true }

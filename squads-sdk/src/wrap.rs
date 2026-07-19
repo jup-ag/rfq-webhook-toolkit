@@ -1,14 +1,11 @@
 use base64::{prelude::BASE64_STANDARD, Engine};
-use solana_sdk::{
-    compute_budget,
-    compute_budget::ComputeBudgetInstruction,
-    hash::Hash,
-    instruction::{AccountMeta, Instruction},
-    message::{self, VersionedMessage},
-    pubkey::Pubkey,
-    signature::NullSigner,
-    transaction::VersionedTransaction,
-};
+use solana_compute_budget_interface::{self as compute_budget, ComputeBudgetInstruction};
+use solana_hash::Hash;
+use solana_instruction::{AccountMeta, Instruction};
+use solana_message::{self as message, VersionedMessage};
+use solana_pubkey::Pubkey;
+use solana_signer::null_signer::NullSigner;
+use solana_transaction::versioned::VersionedTransaction;
 
 use crate::{
     accounts::compile_remaining_accounts,
@@ -234,9 +231,7 @@ pub fn can_wrap(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::{
-        hash::Hash, instruction::AccountMeta, instruction::Instruction, pubkey, pubkey::Pubkey,
-    };
+    use solana_pubkey::pubkey;
 
     use crate::accounts::compile_remaining_accounts;
 
@@ -664,10 +659,7 @@ mod tests {
 
     #[test]
     fn wrap_transaction_base64_rejects_alt_transactions() {
-        use solana_sdk::{
-            address_lookup_table::AddressLookupTableAccount, message::v0::Message,
-            signature::NullSigner,
-        };
+        use solana_message::{v0::Message, AddressLookupTableAccount};
 
         let (settings, vault, member_a, member_b, _, swap_program, token_program, user_ata) =
             test_pubkeys();

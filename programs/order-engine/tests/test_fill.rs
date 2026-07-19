@@ -1,39 +1,33 @@
-use std::sync::Arc;
+use std::path::PathBuf;
 
-use agave_feature_set::bpf_account_data_direct_mapping;
-use anchor_lang::{
-    prelude::*,
-    solana_program::{self, instruction::Instruction},
-    system_program, InstructionData,
-};
-use anchor_spl::token::spl_token::native_mint;
+use anchor_lang::{prelude::*, system_program, InstructionData};
 use assert_matches::assert_matches;
 use itertools::Itertools;
-use solana_program_test::{
-    tokio::{self, sync::Mutex},
-    BanksClient, BanksClientError, ProgramTest,
+use litesvm::{types::FailedTransactionMetadata, LiteSVM};
+use solana_account::Account;
+use solana_instruction::{error::InstructionError, Instruction};
+use solana_keypair::Keypair;
+use solana_native_token::LAMPORTS_PER_SOL;
+use solana_program_pack::Pack;
+use solana_signer::Signer;
+use solana_system_interface::instruction as system_instruction;
+use solana_transaction::Transaction;
+use solana_transaction_error::TransactionError;
+use spl_associated_token_account_interface::{
+    address::get_associated_token_address_with_program_id,
+    instruction::create_associated_token_account,
 };
-use solana_sdk::{
-    native_token::LAMPORTS_PER_SOL, signature::Keypair, signer::Signer, system_instruction,
-    transaction::Transaction, transaction::TransactionError,
+use spl_token_2022_interface::{
+    self as spl_token_2022,
+    extension::{transfer_fee, ExtensionType, StateWithExtensions},
 };
-use spl_token_client::{
-    client::{
-        ProgramBanksClient, ProgramBanksClientProcessTransaction, SendTransaction,
-        SimulateTransaction,
-    },
-    token::{ExtensionInitializationParams, Token},
-};
+use spl_token_interface as spl_token;
 use test_case::test_case;
 
-async fn get_amount_or_lamports(
-    token: &Token<ProgramBanksClientProcessTransaction>,
-    user: Pubkey,
-    token_account: &Option<Pubkey>,
-) -> u64 {
+fn get_amount_or_lamports(svm: &LiteSVM, user: Pubkey, token_account: &Option<Pubkey>) -> u64 {
     match token_account {
-        Some(token_account) => token.get_amount(token_account).await,
-        None => token.get_account(user).await.unwrap().lamports,
+        Some(token_account) => token_account_amount(svm, token_account),
+        None => svm.get_account(&user).unwrap().lamports,
     }
 }
 
@@ -48,16 +42,15 @@ async fn get_amount_or_lamports(
 #[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::NativeMint }, ..Default::default()})]
 #[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 0, maximum_fee: 0 }]), ..Default::default()})]
 #[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, output_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 0, maximum_fee: 0 }]), ..Default::default()})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 100, maximum_fee: u64::MAX }]), expected_error: Some(TransactionError::InstructionError(0, solana_sdk::instruction::InstructionError::Custom(u32::from(order_engine::error::OrderEngineError::Token2022MintExtensionNotSupported)))), ..Default::default()})]
-#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::NonTransferable]), expected_error: Some(TransactionError::InstructionError(0, solana_sdk::instruction::InstructionError::Custom(anchor_spl::token_2022::spl_token_2022::error::TokenError::NonTransferable as u32))), ..Default::default()})]
-#[tokio::test]
-async fn test_fill(test_mode: TestMode) {
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 100, maximum_fee: u64::MAX }]), expected_error: Some(TransactionError::InstructionError(0, InstructionError::Custom(u32::from(order_engine::error::OrderEngineError::Token2022MintExtensionNotSupported)))), ..Default::default()})]
+#[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::NonTransferable]), expected_error: Some(TransactionError::InstructionError(0, InstructionError::Custom(spl_token_2022::error::TokenError::NonTransferable as u32))), ..Default::default()})]
+fn test_fill(test_mode: TestMode) {
     let expected_error = test_mode.expected_error.clone();
-    let test_environment = prepare_test(test_mode).await;
+    let mut test_environment = prepare_test(test_mode);
 
     let fill_instruction = test_environment.create_fill_instruction();
     let TestEnvironment {
-        banks_client,
+        svm,
         payer,
         taker_keypair,
         maker_keypair,
@@ -65,78 +58,69 @@ async fn test_fill(test_mode: TestMode) {
         output_amount,
         maker,
         taker,
-        // TODO: Maker assertions
         taker_input_mint_token_account,
         maker_input_mint_token_account,
         taker_output_mint_token_account,
         maker_output_mint_token_account,
-        input_token,
-        output_token,
         ..
-    } = test_environment;
+    } = &mut test_environment;
 
-    let taker_balance_reader = BalanceReader::new(&input_token, taker, &None);
-    let taker_input_balance_reader =
-        BalanceReader::new(&input_token, taker, &taker_input_mint_token_account);
-    let taker_output_balance_reader =
-        BalanceReader::new(&output_token, taker, &taker_output_mint_token_account);
+    let before_taker_balance = get_amount_or_lamports(svm, *taker, &None);
+    let before_taker_input_amount =
+        get_amount_or_lamports(svm, *taker, taker_input_mint_token_account);
+    let before_taker_output_amount =
+        get_amount_or_lamports(svm, *taker, taker_output_mint_token_account);
 
-    let before_taker_balance = taker_balance_reader.get_balance().await;
-    let before_taker_input_amount = taker_input_balance_reader.get_balance().await;
-    let before_taker_output_amount = taker_output_balance_reader.get_balance().await;
+    let before_maker_balance = get_amount_or_lamports(svm, *maker, &None);
+    let before_maker_input_amount =
+        get_amount_or_lamports(svm, *maker, maker_input_mint_token_account);
+    let before_maker_output_amount =
+        get_amount_or_lamports(svm, *maker, maker_output_mint_token_account);
 
-    let maker_balance_reader = BalanceReader::new(&input_token, taker, &None);
-    let maker_input_balance_reader =
-        BalanceReader::new(&input_token, maker, &maker_input_mint_token_account);
-    let maker_output_balance_reader =
-        BalanceReader::new(&output_token, maker, &maker_output_mint_token_account);
-
-    let before_maker_balance = maker_balance_reader.get_balance().await;
-    let before_maker_input_amount = maker_input_balance_reader.get_balance().await;
-    let before_maker_output_amount = maker_output_balance_reader.get_balance().await;
-
-    // Maker fills
+    // Maker fills.
     let result = process_instructions(
         &[fill_instruction],
-        &payer, // To simplify accounting we make the payer another keypair, this has no impact on the fill instruction
-        &[&taker_keypair, &maker_keypair],
-        &banks_client,
-    )
-    .await;
+        payer,
+        &[taker_keypair, maker_keypair],
+        svm,
+    );
 
     match expected_error {
         Some(expected_error) => {
-            let BanksClientError::TransactionError(transaction_error) = result.unwrap_err() else {
-                panic!("The error was not a transaction error");
-            };
+            let FailedTransactionMetadata {
+                err: transaction_error,
+                ..
+            } = result.unwrap_err();
             assert_eq!(transaction_error, expected_error);
             return;
         }
         None => {
-            assert_matches!(result, Ok(()));
+            assert_matches!(result, Ok(_));
         }
     }
 
-    let after_taker_balance = taker_balance_reader.get_balance().await;
-    let after_taker_input_amount = taker_input_balance_reader.get_balance().await;
-    let after_taker_output_amount = taker_output_balance_reader.get_balance().await;
+    let after_taker_balance = get_amount_or_lamports(svm, *taker, &None);
+    let after_taker_input_amount =
+        get_amount_or_lamports(svm, *taker, taker_input_mint_token_account);
+    let after_taker_output_amount =
+        get_amount_or_lamports(svm, *taker, taker_output_mint_token_account);
 
-    let after_maker_balance = maker_balance_reader.get_balance().await;
-    let after_maker_input_amount = maker_input_balance_reader.get_balance().await;
-    let after_maker_output_amount = maker_output_balance_reader.get_balance().await;
+    let after_maker_balance = get_amount_or_lamports(svm, *maker, &None);
+    let after_maker_input_amount =
+        get_amount_or_lamports(svm, *maker, maker_input_mint_token_account);
+    let after_maker_output_amount =
+        get_amount_or_lamports(svm, *maker, maker_output_mint_token_account);
 
-    println!("{before_taker_input_amount} {after_taker_input_amount}");
     assert_eq!(
         before_taker_input_amount.checked_sub(after_taker_input_amount),
-        Some(input_amount)
+        Some(*input_amount)
     );
-    println!("{after_taker_output_amount:?} {before_taker_output_amount:?}");
     assert_eq!(
         after_taker_output_amount.checked_sub(before_taker_output_amount),
-        Some(output_amount)
+        Some(*output_amount)
     );
 
-    // The native sol balance is not already checked so assert no change
+    // The native sol balance is not already checked so assert no change.
     if taker_input_mint_token_account.is_none() && taker_output_mint_token_account.is_none() {
         assert_eq!(before_taker_balance, after_taker_balance);
     }
@@ -144,47 +128,23 @@ async fn test_fill(test_mode: TestMode) {
     println!("{after_maker_input_amount} {before_maker_input_amount}");
     assert_eq!(
         after_maker_input_amount.checked_sub(before_maker_input_amount),
-        Some(input_amount)
+        Some(*input_amount)
     );
     println!("{before_maker_output_amount:?} {after_maker_output_amount:?}");
     assert_eq!(
         before_maker_output_amount.checked_sub(after_maker_output_amount),
-        Some(output_amount)
+        Some(*output_amount)
     );
 
-    // The native sol balance is not already checked so assert no change
+    // The native sol balance is not already checked so assert no change.
     if maker_input_mint_token_account.is_none() && maker_output_mint_token_account.is_none() {
         assert_eq!(before_maker_balance, after_maker_balance);
     }
 }
 
-struct BalanceReader<'a> {
-    token: &'a Token<ProgramBanksClientProcessTransaction>,
-    user: Pubkey,
-    token_account: &'a Option<Pubkey>,
-}
-
-impl<'a> BalanceReader<'a> {
-    fn new(
-        token: &'a Token<ProgramBanksClientProcessTransaction>,
-        user: Pubkey,
-        token_account: &'a Option<Pubkey>,
-    ) -> Self {
-        Self {
-            token,
-            user,
-            token_account,
-        }
-    }
-
-    async fn get_balance(&self) -> u64 {
-        get_amount_or_lamports(self.token, self.user, self.token_account).await
-    }
-}
-
 struct TestEnvironment {
-    banks_client: Arc<Mutex<BanksClient>>,
-    payer: Arc<Keypair>,
+    svm: LiteSVM,
+    payer: Keypair,
     taker_keypair: Keypair,
     maker_keypair: Keypair,
     input_amount: u64,
@@ -201,8 +161,6 @@ struct TestEnvironment {
     output_mint: Pubkey,
     output_token_program: Pubkey,
     temporary_wsol_token_account: Option<Pubkey>,
-    input_token: Token<ProgramBanksClientProcessTransaction>,
-    output_token: Token<ProgramBanksClientProcessTransaction>,
 }
 
 impl TestEnvironment {
@@ -276,6 +234,50 @@ struct Accounts {
     output: AccountKind,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+enum ExtensionInitializationParams {
+    TransferFeeConfig {
+        transfer_fee_config_authority: Option<Pubkey>,
+        withdraw_withheld_authority: Option<Pubkey>,
+        transfer_fee_basis_points: u16,
+        maximum_fee: u64,
+    },
+    NonTransferable,
+}
+
+impl ExtensionInitializationParams {
+    fn extension(&self) -> ExtensionType {
+        match self {
+            Self::TransferFeeConfig { .. } => ExtensionType::TransferFeeConfig,
+            Self::NonTransferable => ExtensionType::NonTransferable,
+        }
+    }
+
+    fn instruction(&self, token_program_id: &Pubkey, mint: &Pubkey) -> Instruction {
+        match self {
+            Self::TransferFeeConfig {
+                transfer_fee_config_authority,
+                withdraw_withheld_authority,
+                transfer_fee_basis_points,
+                maximum_fee,
+            } => transfer_fee::instruction::initialize_transfer_fee_config(
+                token_program_id,
+                mint,
+                transfer_fee_config_authority.as_ref(),
+                withdraw_withheld_authority.as_ref(),
+                *transfer_fee_basis_points,
+                *maximum_fee,
+            )
+            .unwrap(),
+            Self::NonTransferable => spl_token_2022::instruction::initialize_non_transferable_mint(
+                token_program_id,
+                mint,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 #[derive(Default)]
 struct TestMode {
     taker_accounts: Accounts,
@@ -285,17 +287,37 @@ struct TestMode {
     output_mint_extensions: Option<Vec<ExtensionInitializationParams>>,
 }
 
+struct TestToken {
+    mint: Pubkey,
+    program_id: Pubkey,
+}
+
+impl TestToken {
+    fn new(mint: Pubkey, program_id: Pubkey) -> Self {
+        Self { mint, program_id }
+    }
+
+    fn get_associated_token_address(&self, owner: &Pubkey) -> Pubkey {
+        get_associated_token_address_with_program_id(owner, &self.mint, &self.program_id)
+    }
+}
+
 const TEST_AIRDROP: u64 = 5 * LAMPORTS_PER_SOL;
 
-async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
-    let mut pt = ProgramTest::new(
-        "order_engine",
-        order_engine::ID,
-        anchor_processor!(order_engine),
-    );
-    pt.deactivate_feature(bpf_account_data_direct_mapping::ID);
+fn prepare_test(test_mode: TestMode) -> TestEnvironment {
+    let mut svm = LiteSVM::new();
+    ensure_native_mint(&mut svm);
+    let program_path = order_engine_program_path();
+    svm.add_program_from_file(order_engine::ID, &program_path)
+        .unwrap_or_else(|error| {
+            panic!(
+                "failed to load order_engine program from {}: {error}. Build the SBF program first, for example with `cargo build-sbf --manifest-path programs/order-engine/Cargo.toml --sbf-out-dir target/deploy`.",
+                program_path.display()
+            )
+        });
 
-    let (banks_client, payer, _) = pt.start().await;
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), TEST_AIRDROP * 10).unwrap();
 
     let taker_keypair = Keypair::new();
     let taker = taker_keypair.pubkey();
@@ -303,15 +325,7 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
     let maker_keypair = Keypair::new();
     let maker = maker_keypair.pubkey();
 
-    let payer = Arc::new(payer);
-
-    let banks_client = Arc::new(Mutex::new(banks_client));
-    let client = Arc::new(ProgramBanksClient::new_from_client(
-        banks_client.clone(),
-        ProgramBanksClientProcessTransaction,
-    ));
-
-    // Fund the taker and the maker
+    // Fund the taker and the maker.
     process_and_assert_ok(
         &[
             system_instruction::transfer(&payer.pubkey(), &taker, TEST_AIRDROP),
@@ -319,9 +333,8 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         ],
         &payer,
         &[&payer],
-        &banks_client,
-    )
-    .await;
+        &mut svm,
+    );
 
     let (mut mint_a_keypair, mut mint_a, mut mint_b_keypair, mut mint_b) = {
         let mint_a_keypair = Keypair::new();
@@ -333,15 +346,15 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
 
     let mut uses_temporary_wsol_token_account = false;
 
-    // Taker order construction, taker wants some token b for some token a
-    // Using a rate of 1 LST => 150 USDC
+    // Taker order construction, taker wants some token b for some token a.
+    // Using a rate of 1 LST => 150 USDC.
     let input_amount = 1_000_000_000;
     let output_amount = 150_000_000;
 
     let TestMode {
         taker_accounts,
         maker_accounts,
-        expected_error,
+        expected_error: _,
         input_mint_extensions,
         output_mint_extensions,
     } = test_mode;
@@ -377,7 +390,7 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
             },
         ) => {
             mint_a_keypair = None;
-            mint_a = native_mint::ID;
+            mint_a = spl_token::native_mint::ID;
         }
         (
             Accounts {
@@ -400,7 +413,7 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
             },
         ) => {
             mint_b_keypair = None;
-            mint_b = native_mint::ID;
+            mint_b = spl_token::native_mint::ID;
         }
         (
             Accounts {
@@ -423,7 +436,7 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
             },
         ) => {
             mint_a_keypair = None;
-            mint_a = native_mint::ID;
+            mint_a = spl_token::native_mint::ID;
             uses_temporary_wsol_token_account = true;
         }
         (
@@ -447,59 +460,43 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
             },
         ) => {
             mint_b_keypair = None;
-            mint_b = native_mint::ID;
+            mint_b = spl_token::native_mint::ID;
             uses_temporary_wsol_token_account = true;
         }
         _ => panic!("Invalid combo"),
     };
 
-    // Setup 2 mints
+    // Setup 2 mints.
     let token_a_program_id = if input_mint_extensions.is_some() {
-        anchor_spl::token_2022::ID
+        spl_token_2022::ID
     } else {
-        anchor_spl::token::ID
+        spl_token::ID
     };
-    let token_a = Token::new(
-        client.clone(),
-        &token_a_program_id,
-        &mint_a,
-        Some(9),
-        payer.clone(),
-    );
+    let token_a = TestToken::new(mint_a, token_a_program_id);
     if let Some(mint_a_keypair) = &mint_a_keypair {
-        token_a
-            .create_mint(
-                &payer.pubkey(),
-                None,
-                input_mint_extensions.unwrap_or_default(),
-                &[mint_a_keypair],
-            )
-            .await
-            .unwrap();
+        create_mint(
+            &mut svm,
+            &payer,
+            mint_a_keypair,
+            token_a_program_id,
+            input_mint_extensions.unwrap_or_default(),
+        );
     }
 
     let token_b_program_id = if output_mint_extensions.is_some() {
-        anchor_spl::token_2022::ID
+        spl_token_2022::ID
     } else {
-        anchor_spl::token::ID
+        spl_token::ID
     };
-    let token_b = Token::new(
-        client.clone(),
-        &token_b_program_id,
-        &mint_b,
-        Some(9),
-        payer.clone(),
-    );
+    let token_b = TestToken::new(mint_b, token_b_program_id);
     if let Some(mint_b_keypair) = &mint_b_keypair {
-        token_b
-            .create_mint(
-                &payer.pubkey(),
-                None,
-                output_mint_extensions.unwrap_or_default(),
-                &[mint_b_keypair],
-            )
-            .await
-            .unwrap();
+        create_mint(
+            &mut svm,
+            &payer,
+            mint_b_keypair,
+            token_b_program_id,
+            output_mint_extensions.unwrap_or_default(),
+        );
     }
 
     let amount_with_account_kinds = [Some(input_amount), None, None, Some(output_amount)]
@@ -527,26 +524,23 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         ])
         .zip(amount_with_account_kinds)
     {
-        println!("{user} {} {:?}", token.get_address(), amount_with_kind.1);
+        println!("{user} {} {:?}", token.mint, amount_with_kind.1);
         let ata = token.get_associated_token_address(&user);
         let set_ata = match amount_with_kind {
             (amount, AccountKind::Token) => {
-                token.create_associated_token_account(&user).await.unwrap();
+                create_ata(&mut svm, &payer, &user, token);
 
                 if let Some(amount) = amount {
-                    token
-                        .mint_to(&ata, &payer.pubkey(), amount, &[&payer])
-                        .await
-                        .unwrap();
+                    mint_to(&mut svm, &payer, token, &ata, amount);
                 }
                 true
             }
             (None, AccountKind::NativeMint) => {
-                token.create_associated_token_account(&user).await.unwrap();
+                create_ata(&mut svm, &payer, &user, token);
                 true
             }
             (Some(amount), AccountKind::NativeMint) => {
-                // Send enough
+                // Send enough.
                 process_and_assert_ok(
                     &[system_instruction::transfer(
                         &payer.pubkey(),
@@ -555,14 +549,13 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
                     )],
                     &payer,
                     &[&payer],
-                    &banks_client,
-                )
-                .await;
-                token.create_associated_token_account(&user).await.unwrap();
+                    &mut svm,
+                );
+                create_ata(&mut svm, &payer, &user, token);
                 true
             }
             (_, AccountKind::NativeSol) => {
-                // Nothing to setup
+                // Nothing to setup.
                 false
             }
         };
@@ -584,7 +577,7 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
     };
 
     TestEnvironment {
-        banks_client,
+        svm,
         payer,
         taker_keypair,
         maker_keypair,
@@ -596,34 +589,159 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         maker_input_mint_token_account,
         taker_output_mint_token_account,
         maker_output_mint_token_account,
-        input_mint: *token_a.get_address(),
+        input_mint: token_a.mint,
         input_token_program: token_a_program_id,
-        output_mint: *token_b.get_address(),
+        output_mint: token_b.mint,
         output_token_program: token_b_program_id,
-        input_token: token_a,
-        output_token: token_b,
         temporary_wsol_token_account,
     }
 }
 
-pub async fn process_and_assert_ok(
-    instructions: &[Instruction],
-    payer: &Keypair,
-    signers: &[&Keypair],
-    banks_client: &Mutex<BanksClient>,
-) {
-    let result = process_instructions(instructions, payer, signers, banks_client).await;
-    assert_matches!(result, Ok(()));
-}
-pub async fn process_instructions(
-    instructions: &[Instruction],
-    payer: &Keypair,
-    signers: &[&Keypair],
-    banks_client: &Mutex<BanksClient>,
-) -> std::result::Result<(), BanksClientError> {
-    let mut banks_client = banks_client.lock().await;
-    let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
+fn ensure_native_mint(svm: &mut LiteSVM) {
+    let mut data = vec![0; spl_token::state::Mint::LEN];
+    spl_token::state::Mint::pack(
+        spl_token::state::Mint {
+            decimals: spl_token::native_mint::DECIMALS,
+            is_initialized: true,
+            ..Default::default()
+        },
+        &mut data,
+    )
+    .unwrap();
 
+    svm.set_account(
+        spl_token::native_mint::ID,
+        Account {
+            lamports: svm.minimum_balance_for_rent_exemption(data.len()),
+            data,
+            owner: spl_token::ID,
+            executable: false,
+            rent_epoch: 0,
+        },
+    )
+    .unwrap();
+}
+
+fn order_engine_program_path() -> PathBuf {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("../../target/deploy/order_engine.so");
+    path
+}
+
+fn create_mint(
+    svm: &mut LiteSVM,
+    payer: &Keypair,
+    mint: &Keypair,
+    token_program_id: Pubkey,
+    extension_initialization_params: Vec<ExtensionInitializationParams>,
+) {
+    let extension_types = extension_initialization_params
+        .iter()
+        .map(ExtensionInitializationParams::extension)
+        .collect::<Vec<_>>();
+    let space = if token_program_id == spl_token_2022::ID {
+        ExtensionType::try_calculate_account_len::<spl_token_2022::state::Mint>(&extension_types)
+            .unwrap()
+    } else {
+        spl_token::state::Mint::LEN
+    };
+    let mut instructions = vec![system_instruction::create_account(
+        &payer.pubkey(),
+        &mint.pubkey(),
+        svm.minimum_balance_for_rent_exemption(space),
+        space as u64,
+        &token_program_id,
+    )];
+
+    for params in extension_initialization_params {
+        instructions.push(params.instruction(&token_program_id, &mint.pubkey()));
+    }
+
+    let initialize_mint_instruction = if token_program_id == spl_token_2022::ID {
+        spl_token_2022::instruction::initialize_mint(
+            &token_program_id,
+            &mint.pubkey(),
+            &payer.pubkey(),
+            None,
+            9,
+        )
+        .unwrap()
+    } else {
+        spl_token::instruction::initialize_mint(
+            &token_program_id,
+            &mint.pubkey(),
+            &payer.pubkey(),
+            None,
+            9,
+        )
+        .unwrap()
+    };
+    instructions.push(initialize_mint_instruction);
+
+    process_and_assert_ok(&instructions, payer, &[payer, mint], svm);
+}
+
+fn create_ata(svm: &mut LiteSVM, payer: &Keypair, owner: &Pubkey, token: &TestToken) {
+    process_and_assert_ok(
+        &[create_associated_token_account(
+            &payer.pubkey(),
+            owner,
+            &token.mint,
+            &token.program_id,
+        )],
+        payer,
+        &[payer],
+        svm,
+    );
+}
+
+fn mint_to(
+    svm: &mut LiteSVM,
+    payer: &Keypair,
+    token: &TestToken,
+    token_account: &Pubkey,
+    amount: u64,
+) {
+    let instruction = if token.program_id == spl_token_2022::ID {
+        spl_token_2022::instruction::mint_to(
+            &token.program_id,
+            &token.mint,
+            token_account,
+            &payer.pubkey(),
+            &[],
+            amount,
+        )
+        .unwrap()
+    } else {
+        spl_token::instruction::mint_to(
+            &token.program_id,
+            &token.mint,
+            token_account,
+            &payer.pubkey(),
+            &[],
+            amount,
+        )
+        .unwrap()
+    };
+    process_and_assert_ok(&[instruction], payer, &[payer], svm);
+}
+
+pub fn process_and_assert_ok(
+    instructions: &[Instruction],
+    payer: &Keypair,
+    signers: &[&Keypair],
+    svm: &mut LiteSVM,
+) {
+    let result = process_instructions(instructions, payer, signers, svm);
+    assert_matches!(result, Ok(_));
+}
+
+pub fn process_instructions(
+    instructions: &[Instruction],
+    payer: &Keypair,
+    signers: &[&Keypair],
+    svm: &mut LiteSVM,
+) -> std::result::Result<litesvm::types::TransactionMetadata, FailedTransactionMetadata> {
     let mut all_signers = vec![payer];
     all_signers.extend_from_slice(signers);
 
@@ -631,41 +749,24 @@ pub async fn process_instructions(
         instructions,
         Some(&payer.pubkey()),
         &all_signers,
-        recent_blockhash,
+        svm.latest_blockhash(),
     );
 
     println!("TX size: {}", bincode::serialize(&tx).unwrap().len());
 
-    banks_client.process_transaction(tx).await
+    svm.send_transaction(tx)
 }
 
-/// Workaround from anchor issue https://github.com/coral-xyz/anchor/issues/2738#issuecomment-2230683481
-#[macro_export]
-macro_rules! anchor_processor {
-    ($program:ident) => {{
-        fn entry(
-            program_id: &solana_program::pubkey::Pubkey,
-            accounts: &[solana_program::account_info::AccountInfo],
-            instruction_data: &[u8],
-        ) -> solana_program::entrypoint::ProgramResult {
-            let accounts = Box::leak(Box::new(accounts.to_vec()));
-
-            $program::entry(program_id, accounts, instruction_data)
-        }
-
-        solana_program_test::processor!(entry)
-    }};
-}
-
-trait TokenExtra {
-    async fn get_amount(&self, account: &Pubkey) -> u64;
-}
-
-impl<T> TokenExtra for Token<T>
-where
-    T: SendTransaction + SimulateTransaction,
-{
-    async fn get_amount(&self, account: &Pubkey) -> u64 {
-        self.get_account_info(account).await.unwrap().base.amount
+fn token_account_amount(svm: &LiteSVM, account: &Pubkey) -> u64 {
+    let account = svm.get_account(account).unwrap();
+    if account.owner == spl_token_2022::ID {
+        StateWithExtensions::<spl_token_2022::state::Account>::unpack(&account.data)
+            .unwrap()
+            .base
+            .amount
+    } else {
+        spl_token::state::Account::unpack(&account.data)
+            .unwrap()
+            .amount
     }
 }
