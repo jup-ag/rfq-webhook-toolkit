@@ -45,6 +45,7 @@ fn get_amount_or_lamports(svm: &LiteSVM, user: Pubkey, token_account: &Option<Pu
 #[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::TransferFeeConfig { transfer_fee_config_authority: None, withdraw_withheld_authority: None, transfer_fee_basis_points: 100, maximum_fee: u64::MAX }]), expected_error: Some(TransactionError::InstructionError(0, InstructionError::Custom(u32::from(order_engine::error::OrderEngineError::Token2022MintExtensionNotSupported)))), ..Default::default()})]
 #[test_case(TestMode { taker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, maker_accounts: Accounts { input: AccountKind::Token, output: AccountKind::Token }, input_mint_extensions: Some(vec![ExtensionInitializationParams::NonTransferable]), expected_error: Some(TransactionError::InstructionError(0, InstructionError::Custom(spl_token_2022::error::TokenError::NonTransferable as u32))), ..Default::default()})]
 fn test_fill(test_mode: TestMode) {
+    let test_case_label = test_mode.label();
     let expected_error = test_mode.expected_error.clone();
     let mut test_environment = prepare_test(test_mode);
 
@@ -89,13 +90,22 @@ fn test_fill(test_mode: TestMode) {
         Some(expected_error) => {
             let FailedTransactionMetadata {
                 err: transaction_error,
+                meta,
                 ..
             } = result.unwrap_err();
+            println!(
+                "CU_USAGE case=\"{test_case_label}\" status=expected_error cu={} err={transaction_error:?}",
+                meta.compute_units_consumed
+            );
             assert_eq!(transaction_error, expected_error);
             return;
         }
         None => {
-            assert_matches!(result, Ok(_));
+            let meta = result.unwrap();
+            println!(
+                "CU_USAGE case=\"{test_case_label}\" status=ok cu={}",
+                meta.compute_units_consumed
+            );
         }
     }
 
@@ -125,12 +135,10 @@ fn test_fill(test_mode: TestMode) {
         assert_eq!(before_taker_balance, after_taker_balance);
     }
 
-    println!("{after_maker_input_amount} {before_maker_input_amount}");
     assert_eq!(
         after_maker_input_amount.checked_sub(before_maker_input_amount),
         Some(*input_amount)
     );
-    println!("{before_maker_output_amount:?} {after_maker_output_amount:?}");
     assert_eq!(
         before_maker_output_amount.checked_sub(after_maker_output_amount),
         Some(*output_amount)
@@ -160,7 +168,6 @@ struct TestEnvironment {
     input_token_program: Pubkey,
     output_mint: Pubkey,
     output_token_program: Pubkey,
-    temporary_wsol_token_account: Option<Pubkey>,
 }
 
 impl TestEnvironment {
@@ -178,7 +185,6 @@ impl TestEnvironment {
             input_token_program,
             output_mint,
             output_token_program,
-            temporary_wsol_token_account,
             ..
         } = self;
         let mut data = order_engine::instruction::Fill {
@@ -192,7 +198,7 @@ impl TestEnvironment {
         let fee_bps: u16 = 0;
         data.extend(fee_bps.to_le_bytes());
 
-        let mut instruction = Instruction {
+        Instruction {
             program_id: order_engine::ID,
             accounts: order_engine::accounts::Fill {
                 maker: *maker,
@@ -209,18 +215,11 @@ impl TestEnvironment {
             }
             .to_account_metas(None),
             data,
-        };
-        if let Some(temporary_wsol_token_account) = temporary_wsol_token_account {
-            instruction
-                .accounts
-                .push(AccountMeta::new(*temporary_wsol_token_account, false));
         }
-
-        instruction
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Copy, Default, Debug)]
 enum AccountKind {
     #[default]
     Token,
@@ -228,10 +227,26 @@ enum AccountKind {
     NativeSol,
 }
 
-#[derive(Default)]
+impl AccountKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Token => "token",
+            Self::NativeMint => "wsol",
+            Self::NativeSol => "sol",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
 struct Accounts {
     input: AccountKind,
     output: AccountKind,
+}
+
+impl Accounts {
+    fn label(self) -> String {
+        format!("{}->{}", self.input.label(), self.output.label())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -246,6 +261,17 @@ enum ExtensionInitializationParams {
 }
 
 impl ExtensionInitializationParams {
+    fn label(&self) -> String {
+        match self {
+            Self::TransferFeeConfig {
+                transfer_fee_basis_points,
+                maximum_fee,
+                ..
+            } => format!("transfer_fee_bps_{transfer_fee_basis_points}_max_{maximum_fee}"),
+            Self::NonTransferable => "non_transferable".to_string(),
+        }
+    }
+
     fn extension(&self) -> ExtensionType {
         match self {
             Self::TransferFeeConfig { .. } => ExtensionType::TransferFeeConfig,
@@ -285,6 +311,31 @@ struct TestMode {
     expected_error: Option<TransactionError>,
     input_mint_extensions: Option<Vec<ExtensionInitializationParams>>,
     output_mint_extensions: Option<Vec<ExtensionInitializationParams>>,
+}
+
+impl TestMode {
+    fn label(&self) -> String {
+        fn extensions_label(extensions: &Option<Vec<ExtensionInitializationParams>>) -> String {
+            extensions
+                .as_ref()
+                .map(|extensions| {
+                    extensions
+                        .iter()
+                        .map(ExtensionInitializationParams::label)
+                        .join("+")
+                })
+                .unwrap_or_else(|| "none".to_string())
+        }
+
+        format!(
+            "taker:{} maker:{} input_ext:{} output_ext:{} expected_error:{}",
+            self.taker_accounts.label(),
+            self.maker_accounts.label(),
+            extensions_label(&self.input_mint_extensions),
+            extensions_label(&self.output_mint_extensions),
+            self.expected_error.is_some()
+        )
+    }
 }
 
 struct TestToken {
@@ -343,8 +394,6 @@ fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         let mint_b = mint_b_keypair.pubkey();
         (Some(mint_a_keypair), mint_a, Some(mint_b_keypair), mint_b)
     };
-
-    let mut uses_temporary_wsol_token_account = false;
 
     // Taker order construction, taker wants some token b for some token a.
     // Using a rate of 1 LST => 150 USDC.
@@ -437,7 +486,6 @@ fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         ) => {
             mint_a_keypair = None;
             mint_a = spl_token::native_mint::ID;
-            uses_temporary_wsol_token_account = true;
         }
         (
             Accounts {
@@ -461,7 +509,6 @@ fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         ) => {
             mint_b_keypair = None;
             mint_b = spl_token::native_mint::ID;
-            uses_temporary_wsol_token_account = true;
         }
         _ => panic!("Invalid combo"),
     };
@@ -524,7 +571,6 @@ fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         ])
         .zip(amount_with_account_kinds)
     {
-        println!("{user} {} {:?}", token.mint, amount_with_kind.1);
         let ata = token.get_associated_token_address(&user);
         let set_ata = match amount_with_kind {
             (amount, AccountKind::Token) => {
@@ -564,18 +610,6 @@ fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         }
     }
 
-    let temporary_wsol_token_account = if uses_temporary_wsol_token_account {
-        Some(
-            Pubkey::find_program_address(
-                &[order_engine::TEMPORARY_WSOL_TOKEN_ACCOUNT, maker.as_ref()],
-                &order_engine::ID,
-            )
-            .0,
-        )
-    } else {
-        None
-    };
-
     TestEnvironment {
         svm,
         payer,
@@ -593,7 +627,6 @@ fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         input_token_program: token_a_program_id,
         output_mint: token_b.mint,
         output_token_program: token_b_program_id,
-        temporary_wsol_token_account,
     }
 }
 
@@ -751,8 +784,6 @@ pub fn process_instructions(
         &all_signers,
         svm.latest_blockhash(),
     );
-
-    println!("TX size: {}", bincode::serialize(&tx).unwrap().len());
 
     svm.send_transaction(tx)
 }

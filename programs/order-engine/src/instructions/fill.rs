@@ -1,14 +1,8 @@
-use anchor_lang::{
-    prelude::*,
-    solana_program::program::{invoke, invoke_signed},
-    system_program,
-};
+use anchor_lang::{prelude::*, solana_program::program::invoke, system_program};
 use anchor_spl::{
     token::{self},
     token_interface::{self, spl_pod::primitives::PodU16, TokenAccount, TokenInterface},
 };
-use solana_program_pack::Pack;
-use solana_system_interface::instruction as system_instruction;
 use spl_token_2022_interface::{
     self as spl_token_2022,
     extension::{transfer_fee::TransferFeeConfig, BaseStateWithExtensions, StateWithExtensions},
@@ -16,66 +10,6 @@ use spl_token_2022_interface::{
 use spl_token_interface::{self as spl_token, native_mint};
 
 use crate::error::OrderEngineError;
-
-pub const TEMPORARY_WSOL_TOKEN_ACCOUNT: &[u8] = b"temporary-wsol-token-account";
-
-fn create_pda_account<'info>(
-    payer: &AccountInfo<'info>,
-    rent: &Rent,
-    space: usize,
-    owner: &Pubkey,
-    system_program: &AccountInfo<'info>,
-    new_pda_account: &AccountInfo<'info>,
-    new_pda_signer_seeds: &[&[u8]],
-) -> Result<()> {
-    if new_pda_account.lamports() > 0 {
-        let required_lamports = rent
-            .minimum_balance(space)
-            .max(1)
-            .saturating_sub(new_pda_account.lamports());
-
-        if required_lamports > 0 {
-            invoke(
-                &system_instruction::transfer(payer.key, new_pda_account.key, required_lamports),
-                &[
-                    payer.clone(),
-                    new_pda_account.clone(),
-                    system_program.clone(),
-                ],
-            )?;
-        }
-
-        invoke_signed(
-            &system_instruction::allocate(new_pda_account.key, space as u64),
-            &[new_pda_account.clone(), system_program.clone()],
-            &[new_pda_signer_seeds],
-        )?;
-
-        invoke_signed(
-            &system_instruction::assign(new_pda_account.key, owner),
-            &[new_pda_account.clone(), system_program.clone()],
-            &[new_pda_signer_seeds],
-        )?;
-    } else {
-        invoke_signed(
-            &system_instruction::create_account(
-                payer.key,
-                new_pda_account.key,
-                rent.minimum_balance(space).max(1),
-                space as u64,
-                owner,
-            ),
-            &[
-                payer.clone(),
-                new_pda_account.clone(),
-                system_program.clone(),
-            ],
-            &[new_pda_signer_seeds],
-        )?;
-    }
-
-    Ok(())
-}
 
 pub fn handle_fill<'info>(
     ctx: Context<'info, Fill<'info>>,
@@ -127,14 +61,10 @@ pub fn handle_fill<'info>(
             require_keys_eq!(ctx.accounts.input_mint.key(), native_mint::ID);
 
             unwrap_sol(
-                ctx.accounts.maker.to_account_info(),
                 ctx.accounts.taker.to_account_info(),
                 taker_input_mint_token_account.to_account_info(),
-                None,
-                ctx.remaining_accounts.iter().next(),
-                ctx.accounts.input_mint.to_account_info(),
+                ctx.accounts.maker.to_account_info(),
                 ctx.accounts.input_token_program.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
                 input_amount,
             )?;
         }
@@ -171,13 +101,9 @@ pub fn handle_fill<'info>(
 
             unwrap_sol(
                 ctx.accounts.maker.to_account_info(),
-                ctx.accounts.maker.to_account_info(),
                 maker_output_mint_token_account.to_account_info(),
-                Some(ctx.accounts.taker.to_account_info()),
-                ctx.remaining_accounts.iter().next(),
-                ctx.accounts.output_mint.to_account_info(),
+                ctx.accounts.taker.to_account_info(),
                 ctx.accounts.output_token_program.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
                 output_amount,
             )?;
         }
@@ -315,84 +241,34 @@ pub struct Fill<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[allow(clippy::too_many_arguments)]
 fn unwrap_sol<'info>(
-    maker: AccountInfo<'info>,
-    sender: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
     sender_token_account: AccountInfo<'info>,
-    receiver: Option<AccountInfo<'info>>,
-    temporary_wsol_token_account: Option<&AccountInfo<'info>>,
-    wsol_mint: AccountInfo<'info>,
+    receiver: AccountInfo<'info>,
     token_program: AccountInfo<'info>,
-    system_program: AccountInfo<'info>,
     amount: u64,
 ) -> Result<()> {
-    let temporary_wsol_token_account = temporary_wsol_token_account
-        .ok_or(OrderEngineError::MissingTemporaryWrappedSolTokenAccount)?;
+    let instruction = if token_program.key.eq(&spl_token_2022::ID) {
+        spl_token_2022::instruction::unwrap_lamports(
+            token_program.key,
+            sender_token_account.key,
+            receiver.key,
+            authority.key,
+            &[],
+            Some(amount),
+        )?
+    } else {
+        spl_token::instruction::unwrap_lamports(
+            token_program.key,
+            sender_token_account.key,
+            receiver.key,
+            authority.key,
+            &[],
+            Some(amount),
+        )?
+    };
 
-    let (expected_temporary_wsol_token_account, bump) = Pubkey::find_program_address(
-        &[TEMPORARY_WSOL_TOKEN_ACCOUNT, maker.key.as_ref()],
-        &crate::ID,
-    );
-    require_keys_eq!(
-        temporary_wsol_token_account.key(),
-        expected_temporary_wsol_token_account
-    );
-    let new_pda_signer_seeds: &[&[u8]] =
-        &[TEMPORARY_WSOL_TOKEN_ACCOUNT, maker.key.as_ref(), &[bump]];
-    create_pda_account(
-        &maker,
-        &Rent::get()?,
-        spl_token::state::Account::LEN,
-        &spl_token::ID,
-        &system_program,
-        temporary_wsol_token_account,
-        new_pda_signer_seeds,
-    )?;
-    token::initialize_account3(CpiContext::new(
-        *token_program.key,
-        token::InitializeAccount3 {
-            account: temporary_wsol_token_account.clone(),
-            mint: wsol_mint,
-            authority: maker.clone(),
-        },
-    ))?;
-
-    token::transfer(
-        CpiContext::new(
-            *token_program.key,
-            token::Transfer {
-                from: sender_token_account.clone(),
-                to: temporary_wsol_token_account.clone(),
-                authority: sender.clone(),
-            },
-        ),
-        amount,
-    )?;
-
-    // Close temporary wsol token account into the maker
-    token::close_account(CpiContext::new(
-        *token_program.key,
-        token::CloseAccount {
-            account: temporary_wsol_token_account.clone(),
-            destination: maker.clone(),
-            authority: maker.clone(),
-        },
-    ))?;
-
-    if let Some(receiver) = receiver {
-        // Transfer native sol to receipient
-        system_program::transfer(
-            CpiContext::new(
-                *system_program.key,
-                system_program::Transfer {
-                    from: maker,
-                    to: receiver,
-                },
-            ),
-            amount,
-        )?;
-    }
+    invoke(&instruction, &[sender_token_account, receiver, authority])?;
 
     Ok(())
 }

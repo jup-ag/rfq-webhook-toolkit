@@ -91,12 +91,5 @@
       "code": 6001,
       "name": "MissingTemporaryWrappedSolTokenAccount"
     }
-  ],
-  "constants": [
-    {
-      "name": "TEMPORARY_WSOL_TOKEN_ACCOUNT",
-      "type": "bytes",
-      "value": "[116, 101, 109, 112, 111, 114, 97, 114, 121, 45, 119, 115, 111, 108, 45, 116, 111, 107, 101, 110, 45, 97, 99, 99, 111, 117, 110, 116]"
-    }
   ]
 }

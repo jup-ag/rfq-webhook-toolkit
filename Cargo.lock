@@ -2916,7 +2916,6 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "assert_matches",
- "bincode",
  "itertools 0.14.0",
  "litesvm",
  "solana-account 4.3.1",

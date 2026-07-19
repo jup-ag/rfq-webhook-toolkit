@@ -29,8 +29,6 @@ check-cfg = [
 [dependencies]
 anchor-lang = { workspace = true }
 anchor-spl = { workspace = true }
-solana-program-pack = { workspace = true }
-solana-system-interface = { workspace = true }
 spl-token-interface = { workspace = true }
 spl-token-2022-interface = { workspace = true }
 
@@ -40,13 +38,13 @@ solana-instruction = { workspace = true }
 solana-instruction-error = { workspace = true }
 solana-keypair = { workspace = true }
 solana-native-token = { workspace = true }
+solana-program-pack = { workspace = true }
 solana-signer = { workspace = true }
 solana-system-interface = { workspace = true }
 solana-transaction = { workspace = true }
 solana-transaction-error = { workspace = true }
 litesvm = { workspace = true }
 spl-associated-token-account-interface = { workspace = true }
-bincode = { workspace = true }
 assert_matches = { workspace = true }
 itertools = { workspace = true }
 test-case = { workspace = true }
