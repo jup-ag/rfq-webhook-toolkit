@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-};
+use solana_instruction::{AccountMeta, Instruction};
+use solana_pubkey::Pubkey;
 
 use crate::error::{Result, SquadsSdkError};
 

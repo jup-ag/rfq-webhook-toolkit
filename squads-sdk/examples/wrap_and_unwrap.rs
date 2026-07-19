@@ -6,12 +6,9 @@
 //!
 //! Requires mainnet RPC access (for the blockhash).
 
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    instruction::{AccountMeta, Instruction},
-    pubkey,
-};
+use solana_instruction::{AccountMeta, Instruction};
+use solana_pubkey::pubkey;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
 use squads_sdk::{build_squads_wrapped_transaction, unwrap_transaction, SquadsWrapConfig};
 
@@ -52,10 +49,9 @@ async fn main() {
     };
 
     let recent_blockhash = rpc
-        .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())
+        .get_latest_blockhash()
         .await
-        .expect("failed to get blockhash")
-        .0;
+        .expect("failed to get blockhash");
 
     // Wrap it. The result has null signatures — members sign it before submitting.
     let wrapped_tx = build_squads_wrapped_transaction(

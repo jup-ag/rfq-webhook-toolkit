@@ -1,4 +1,4 @@
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::error::{Result, SquadsSdkError};
 use crate::pda::derive_vault_pda;

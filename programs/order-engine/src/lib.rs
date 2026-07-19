@@ -18,8 +18,8 @@ declare_id!("61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH");
 pub mod order_engine {
     use super::*;
 
-    pub fn fill<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, Fill<'info>>,
+    pub fn fill<'info>(
+        ctx: Context<'info, Fill<'info>>,
         input_amount: u64,
         output_amount: u64,
         expire_at: i64,
