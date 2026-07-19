@@ -5,9 +5,6 @@ mod instructions;
 
 use instructions::*;
 
-#[constant]
-pub const TEMPORARY_WSOL_TOKEN_ACCOUNT: &[u8] = instructions::TEMPORARY_WSOL_TOKEN_ACCOUNT;
-
 #[cfg(not(feature = "production"))]
 declare_id!("RderEngine111111111111111111111111111111112");
 
