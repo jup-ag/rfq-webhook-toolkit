@@ -9,12 +9,11 @@ pub mod unwrap;
 pub mod wrap;
 
 use sha2::{Digest, Sha256};
-use solana_sdk::message::VersionedMessage;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::VersionedTransaction;
+use solana_message::VersionedMessage;
+use solana_pubkey::{pubkey, Pubkey};
+use solana_transaction::versioned::VersionedTransaction;
 
-pub const SQUADS_PROGRAM_ID: Pubkey =
-    solana_sdk::pubkey!("SMRTzfY6DfH5ik3TKiyLFfXexV8uSG3d2UksSCYdunG");
+pub const SQUADS_PROGRAM_ID: Pubkey = pubkey!("SMRTzfY6DfH5ik3TKiyLFfXexV8uSG3d2UksSCYdunG");
 
 pub const EXECUTE_TX_SYNC_V2_DISCRIMINATOR: [u8; 8] = [90, 81, 187, 81, 39, 70, 128, 78];
 
@@ -74,9 +73,8 @@ mod tests {
 
     #[test]
     fn is_squads_transaction_detects_wrapped_tx() {
-        use solana_sdk::{
-            hash::Hash, instruction::AccountMeta, instruction::Instruction, pubkey::Pubkey,
-        };
+        use solana_hash::Hash;
+        use solana_instruction::{AccountMeta, Instruction};
 
         let settings = Pubkey::new_unique();
         let vault = Pubkey::new_unique();
@@ -109,14 +107,10 @@ mod tests {
 
     #[test]
     fn is_squads_transaction_rejects_plain_tx() {
-        use solana_sdk::{
-            compute_budget::ComputeBudgetInstruction,
-            hash::Hash,
-            message::{self, VersionedMessage},
-            pubkey::Pubkey,
-            signature::NullSigner,
-            transaction::VersionedTransaction,
-        };
+        use solana_compute_budget_interface::ComputeBudgetInstruction;
+        use solana_hash::Hash;
+        use solana_message::{self as message, VersionedMessage};
+        use solana_signer::null_signer::NullSigner;
 
         let payer = Pubkey::new_unique();
         let message = message::v0::Message::try_compile(

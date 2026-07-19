@@ -10,11 +10,8 @@ use anyhow::Result;
 use order_engine_sdk::transaction::{
     deserialize_transaction_base64_into_transaction_details, TransactionDetails,
 };
-use solana_rpc_client::rpc_client::SerializableTransaction;
-use solana_sdk::{
-    signature::Keypair,
-    signer::{EncodableKey, Signer},
-};
+use solana_keypair::Keypair;
+use solana_signer::{EncodableKey, Signer};
 use thiserror::Error;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -280,7 +277,7 @@ async fn example_swap(
                     ));
                 }
             }
-            let signature = versioned_transaction.get_signature().to_string();
+            let signature = versioned_transaction.signatures[0].to_string();
 
             // ========================================
             // broadcast the transaction

@@ -1,20 +1,16 @@
 use crate::order_engine;
-use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
-use anchor_spl::{
-    associated_token::{self, get_associated_token_address_with_program_id},
-    token::{self, spl_token::instruction::TokenInstruction},
-    token_2022,
-};
+use anchor_lang::{prelude::Pubkey, pubkey, AnchorDeserialize, Discriminator};
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use solana_sdk::{
-    borsh1::try_from_slice_unchecked,
-    compute_budget::{self, ComputeBudgetInstruction},
-    message::SanitizedMessage,
-    pubkey::Pubkey,
-    system_instruction::SystemInstruction,
-    system_program,
-    sysvar::instructions::BorrowedInstruction,
+use solana_borsh::v1::try_from_slice_unchecked;
+use solana_compute_budget_interface::{self as compute_budget, ComputeBudgetInstruction};
+use solana_instruction::BorrowedInstruction;
+use solana_message::SanitizedMessage;
+use solana_system_interface::{instruction::SystemInstruction, program as system_program};
+use spl_associated_token_account_interface::{
+    address::get_associated_token_address_with_program_id, program as associated_token,
 };
+use spl_token_2022_interface as token_2022;
+use spl_token_interface::{self as token, instruction::TokenInstruction};
 
 const LIGHTHOUSE_PROGRAM_ID: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95");
 const NATIVE_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
@@ -534,15 +530,12 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use anchor_lang::{prelude::*, InstructionData, ToAccountMetas};
-    use solana_sdk::{
-        hash::Hash,
-        instruction::Instruction,
-        message::{
-            v0::{self, LoadedAddresses},
-            SanitizedVersionedMessage, SimpleAddressLoader, VersionedMessage,
-        },
-        system_program,
+    use anchor_lang::{prelude::*, system_program, InstructionData, ToAccountMetas};
+    use solana_hash::Hash;
+    use solana_instruction::{AccountMeta, Instruction};
+    use solana_message::{
+        v0::{self, LoadedAddresses},
+        SanitizedVersionedMessage, SimpleAddressLoader, VersionedMessage,
     };
 
     fn make_sanitized_transaction(
@@ -774,7 +767,7 @@ mod tests {
         amount: u64,
         decimals: u8,
     ) -> Instruction {
-        anchor_spl::token::spl_token::instruction::transfer_checked(
+        token::instruction::transfer_checked(
             &token_program,
             &source,
             &mint,
@@ -886,7 +879,8 @@ mod tests {
             out_amount,
             expire_at,
         );
-        let transfer_ix = solana_sdk::system_instruction::transfer(&taker, &receiver, out_amount);
+        let transfer_ix =
+            solana_system_interface::instruction::transfer(&taker, &receiver, out_amount);
 
         let msg = make_sanitized_transaction(
             &maker,
@@ -1213,7 +1207,7 @@ mod tests {
             200,
             1_000,
         );
-        let transfer_ix = solana_sdk::system_instruction::transfer(&taker, &receiver, 200);
+        let transfer_ix = solana_system_interface::instruction::transfer(&taker, &receiver, 200);
 
         let msg = make_sanitized_transaction(
             &maker,
@@ -1309,11 +1303,11 @@ mod tests {
     // ── integrator-fee validation ────────────────────────────────────────────────────────
 
     fn sync_native_ix(account: Pubkey) -> Instruction {
-        anchor_spl::token::spl_token::instruction::sync_native(&token::ID, &account).unwrap()
+        token::instruction::sync_native(&token::ID, &account).unwrap()
     }
 
     fn system_transfer_ix(from: Pubkey, to: Pubkey, lamports: u64) -> Instruction {
-        solana_sdk::system_instruction::transfer(&from, &to, lamports)
+        solana_system_interface::instruction::transfer(&from, &to, lamports)
     }
 
     #[test]

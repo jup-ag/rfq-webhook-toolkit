@@ -1,9 +1,7 @@
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    message::VersionedMessage,
-    pubkey::Pubkey,
-    transaction::VersionedTransaction,
-};
+use solana_instruction::{AccountMeta, Instruction};
+use solana_message::VersionedMessage;
+use solana_pubkey::Pubkey;
+use solana_transaction::versioned::VersionedTransaction;
 
 use crate::{
     error::{Result, SquadsSdkError},
@@ -174,7 +172,8 @@ pub fn unwrap_transaction_base64(tx_b64: &str) -> Result<UnwrappedTransaction> {
 mod tests {
     use super::*;
     use crate::{config::SquadsWrapConfig, wrap::build_squads_wrapped_transaction};
-    use solana_sdk::{hash::Hash, pubkey};
+    use solana_hash::Hash;
+    use solana_pubkey::pubkey;
 
     fn test_pubkeys() -> (Pubkey, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey) {
         (
@@ -257,11 +256,9 @@ mod tests {
 
     #[test]
     fn unwrap_rejects_non_squads_transaction() {
-        use solana_sdk::{
-            compute_budget::ComputeBudgetInstruction,
-            message::{self, VersionedMessage},
-            signature::NullSigner,
-        };
+        use solana_compute_budget_interface::ComputeBudgetInstruction;
+        use solana_message::{self as message, VersionedMessage};
+        use solana_signer::null_signer::NullSigner;
 
         let payer = Pubkey::new_unique();
         let message = message::v0::Message::try_compile(
@@ -284,12 +281,8 @@ mod tests {
 
     #[test]
     fn unwrap_rejects_alt_messages() {
-        use solana_sdk::{
-            address_lookup_table::AddressLookupTableAccount,
-            instruction::Instruction,
-            message::{v0::Message, VersionedMessage},
-            signature::NullSigner,
-        };
+        use solana_message::{v0::Message, AddressLookupTableAccount, VersionedMessage};
+        use solana_signer::null_signer::NullSigner;
 
         let (_settings, _vault, member_a, _member_b, swap_program, token_program, user_ata) =
             test_pubkeys();

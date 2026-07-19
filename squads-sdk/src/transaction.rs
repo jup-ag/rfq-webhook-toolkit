@@ -1,11 +1,8 @@
-use solana_sdk::{
-    compute_budget,
-    instruction::{AccountMeta, CompiledInstruction, Instruction},
-    message::VersionedMessage,
-    transaction::VersionedTransaction,
-};
-
 use base64::{prelude::BASE64_STANDARD, Engine};
+use solana_compute_budget_interface as compute_budget;
+use solana_instruction::{AccountMeta, Instruction};
+use solana_message::{compiled_instruction::CompiledInstruction, VersionedMessage};
+use solana_transaction::versioned::VersionedTransaction;
 
 use crate::error::{Result, SquadsSdkError};
 
@@ -21,6 +18,7 @@ pub fn decode_transaction_base64(b64: &str) -> Result<VersionedTransaction> {
 pub fn compiled_instructions(message: &VersionedMessage) -> &[CompiledInstruction] {
     match message {
         VersionedMessage::V0(v0) => &v0.instructions,
+        VersionedMessage::V1(v1) => &v1.instructions,
         VersionedMessage::Legacy(legacy) => &legacy.instructions,
     }
 }
@@ -32,6 +30,7 @@ pub fn compiled_instructions(message: &VersionedMessage) -> &[CompiledInstructio
 pub fn uses_address_lookup_tables(message: &VersionedMessage) -> bool {
     match message {
         VersionedMessage::V0(v0) => !v0.address_table_lookups.is_empty(),
+        VersionedMessage::V1(_) => false,
         VersionedMessage::Legacy(_) => false,
     }
 }

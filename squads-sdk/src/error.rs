@@ -37,14 +37,14 @@ pub enum SquadsSdkError {
     SolanaError(String),
 }
 
-impl From<solana_sdk::signer::SignerError> for SquadsSdkError {
-    fn from(e: solana_sdk::signer::SignerError) -> Self {
+impl From<solana_signer::SignerError> for SquadsSdkError {
+    fn from(e: solana_signer::SignerError) -> Self {
         SquadsSdkError::SolanaError(e.to_string())
     }
 }
 
-impl From<solana_sdk::message::CompileError> for SquadsSdkError {
-    fn from(e: solana_sdk::message::CompileError) -> Self {
+impl From<solana_message::CompileError> for SquadsSdkError {
+    fn from(e: solana_message::CompileError) -> Self {
         SquadsSdkError::SolanaError(e.to_string())
     }
 }

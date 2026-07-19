@@ -10,7 +10,6 @@ axum = { workspace = true }
 axum-extra = { workspace = true }
 bytes = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["cargo", "derive", "env"] }
-futures = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -30,8 +29,7 @@ webhook-api = { path = "../webhook-api" }
 order-engine-sdk = { path = "../order-engine-sdk" }
 utoipa = { workspace = true, features = ["axum_extras", "debug"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
-utoipa-axum = { workspace = true, features = ["debug"] }
-solana-sdk = { workspace = true }
+solana-keypair = { workspace = true }
+solana-signer = { workspace = true }
 dotenvy = { workspace = true }
 utoipauto = { workspace = true }
-solana-rpc-client = { workspace = true }

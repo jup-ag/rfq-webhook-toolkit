@@ -2,13 +2,11 @@ use agave_reserved_account_keys::ReservedAccountKeys;
 use anyhow::{anyhow, Result};
 use base64::prelude::*;
 use bincode;
-use solana_sdk::{
-    message::{
-        v0::LoadedAddresses, SanitizedMessage, SanitizedVersionedMessage, SimpleAddressLoader,
-        VersionedMessage,
-    },
-    transaction::VersionedTransaction,
+use solana_message::{
+    v0::LoadedAddresses, SanitizedMessage, SanitizedVersionedMessage, SimpleAddressLoader,
+    VersionedMessage,
 };
+use solana_transaction::versioned::VersionedTransaction;
 
 pub struct TransactionDetails {
     pub versioned_transaction: VersionedTransaction,

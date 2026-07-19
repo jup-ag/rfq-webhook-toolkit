@@ -1,4 +1,4 @@
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use crate::SQUADS_PROGRAM_ID;
 
@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn derive_vault_pda_matches_on_chain_program() {
-        use solana_sdk::pubkey;
+        use solana_pubkey::pubkey;
         // Known settings PDA → vault PDA pair from mainnet
         let settings_pda = pubkey!("8QJmMPTmRJSLsGxjAXYDquEtWjVaKvBK8HVvV4Mcn1gB");
         let expected_vault = pubkey!("HviMBVH4L84zW7xKL8oSPcDbXrjLVyRkCiYUjcVCVACE");
