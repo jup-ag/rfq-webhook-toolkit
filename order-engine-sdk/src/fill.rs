@@ -23,7 +23,13 @@ const NATIVE_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112
 //
 // If we allow the MemoryWrite instruction, the hacker can drain the signer.
 // https://github.com/Jac0xb/lighthouse/blob/main/programs/lighthouse/lighthouse.json
-const ALLOWED_LIGHTHOUSE_DISCRIMINATORS: &[u8] = &[5, 6, 9, 10];
+const ALLOWED_LIGHTHOUSE_DISCRIMINATORS: &[u8] = &[
+    // 0 .. CAUTION - If we allow the MemoryWrite instruction, the hacker can drain the signer.
+    5, // AssertAccountInfo
+    6, // AssertAccountInfoMulti
+    9, // AssertTokenAccount
+    10, // AssertTokenAccountMulti
+];
 
 pub struct Order {
     pub taker: Pubkey,
@@ -373,6 +379,7 @@ pub fn validate_similar_fill_sanitized_message(
         original_message_header.num_required_signatures == message_header.num_required_signatures,
         "Number of required signatures did not match"
     );
+    // TODO use zip! here
     let mut account_keys_iter = sanitized_message.account_keys().iter();
     for original_signer in original_sanitized_message
         .account_keys()
