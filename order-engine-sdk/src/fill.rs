@@ -20,6 +20,7 @@ const LIGHTHOUSE_PROGRAM_ID: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbX
 const NATIVE_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
 
 // We only allow certain instruction from the Lighthouse program.
+// Logic also checks that all accounts are read-only.
 //
 // If we allow the MemoryWrite instruction, the hacker can drain the signer.
 // https://github.com/Jac0xb/lighthouse/blob/main/programs/lighthouse/lighthouse.json
@@ -517,7 +518,7 @@ pub fn validate_similar_fill_sanitized_message(
         index,
         BorrowedInstruction {
             program_id,
-            accounts: _,
+            accounts,
             data,
         },
     ) in sanitized_instructions_iter.enumerate()
@@ -529,10 +530,16 @@ pub fn validate_similar_fill_sanitized_message(
         );
 
         ensure!(
+            // TODO use split_disc1byte_and_bytes
             data.first()
                 .map(|discriminator| ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(discriminator))
                 .unwrap_or(false),
             "Invalid Lighthouse instruction discriminator at index {real_index}"
+        );
+
+        ensure!(
+            accounts.iter().all(|account| !account.is_writable),
+            "Lighthouse instruction accounts must be read-only at index {real_index}"
         );
     }
 
