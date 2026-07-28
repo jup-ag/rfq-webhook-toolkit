@@ -1,4 +1,5 @@
 use crate::order_engine;
+use crate::parse_util::{split_disc1byte_and_bytes, split_disc_and_bytes};
 use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
 use anchor_spl::{
     associated_token::{self, get_associated_token_address_with_program_id},
@@ -129,9 +130,11 @@ pub fn validate_fill_sanitized_message(
                 _ => bail!("Unexpected compute budget instruction"),
             }
         } else if program_id == &associated_token::ID {
-            // For simplicity we only allow create ata idempotent
+            // For simplicity, we only allow create ata idempotent
+            let (discriminator, _) = split_disc1byte_and_bytes(data)
+                .context("Incorrect associated token account program data")?;
             ensure!(
-                data == vec![1],
+                discriminator == &[1],
                 "Incorrect associated token account program data"
             );
 
@@ -142,11 +145,11 @@ pub fn validate_fill_sanitized_message(
             ensure!(!fill_ix_found, "Duplicated fill instruction");
             fill_ix_found = true;
 
-            ensure!(data.len() >= 8, "Not enough data in fill instruction");
             // Must slice off anchor's discriminator first
-            let (discriminator, mut ix_data) = data.split_at(8);
+            let (discriminator, mut ix_data) =
+                split_disc_and_bytes(data).context("Not enough data in fill instruction")?;
             ensure!(
-                discriminator == order_engine::client::args::Fill::DISCRIMINATOR,
+                discriminator.as_slice() == order_engine::client::args::Fill::DISCRIMINATOR,
                 "Not a fill discriminator"
             );
 
@@ -481,10 +484,10 @@ pub fn validate_similar_fill_sanitized_message(
                 validated_similar_fill.is_none(),
                 "Duplicated fill instruction"
             );
-            ensure!(data.len() >= 8, "Not enough data in fill instruction");
-            let (discriminator, mut ix_data) = data.split_at(8);
+            let (discriminator, mut ix_data) =
+                split_disc_and_bytes(data).context("Not enough data in fill instruction")?;
             ensure!(
-                discriminator == order_engine::client::args::Fill::DISCRIMINATOR,
+                discriminator.as_slice() == order_engine::client::args::Fill::DISCRIMINATOR,
                 "Not a fill discriminator"
             );
 
@@ -529,11 +532,11 @@ pub fn validate_similar_fill_sanitized_message(
             "Additional instructions can only be from Lighthouse program at {real_index}"
         );
 
+        let (discriminator, _) = split_disc1byte_and_bytes(data).with_context(|| {
+            format!("Invalid Lighthouse instruction discriminator at index {real_index}")
+        })?;
         ensure!(
-            // TODO use split_disc1byte_and_bytes
-            data.first()
-                .map(|discriminator| ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(discriminator))
-                .unwrap_or(false),
+            ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(&discriminator[0]),
             "Invalid Lighthouse instruction discriminator at index {real_index}"
         );
 
