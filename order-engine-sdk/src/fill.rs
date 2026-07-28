@@ -1,5 +1,5 @@
-use crate::{account_pubkeys, order_engine};
 use crate::parse_util::{split_disc1byte_and_bytes, split_disc_and_bytes};
+use crate::{account_pubkeys, order_engine};
 use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
 use anchor_spl::{
     associated_token::{self, get_associated_token_address_with_program_id},
@@ -14,7 +14,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     system_instruction::SystemInstruction,
     system_program,
-    sysvar::instructions::{BorrowedAccountMeta, BorrowedInstruction},
+    sysvar::instructions::BorrowedInstruction,
 };
 
 const LIGHTHOUSE_PROGRAM_ID: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95");
