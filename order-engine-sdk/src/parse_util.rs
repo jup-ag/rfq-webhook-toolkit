@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 
-/// Splits an 8-byte discriminator off the front, returning `(disc, remaining_bytes)`.
+/// Splits an 8-byte discriminator (anchor style) off the front, returning `(disc, remaining_bytes)`.
 pub fn split_disc_and_bytes(bytes: &[u8]) -> Result<(&[u8; 8], &[u8])> {
     let Some((disc, remaining)) = bytes.split_first_chunk::<8>() else {
         bail!("Not enough bytes to split disc and bytes");
