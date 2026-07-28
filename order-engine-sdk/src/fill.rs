@@ -744,6 +744,27 @@ mod tests {
             .unwrap_err()
             .to_string()
         );
+
+        // Add lighthouse instruction with a writable account
+        let writable_lighthouse_ix = Instruction {
+            program_id: LIGHTHOUSE_PROGRAM_ID,
+            accounts: vec![AccountMeta::new(Pubkey::new_unique(), false)],
+            data: vec![5],
+        };
+        let sanitized_message = make_sanitized_transaction(
+            &maker,
+            &[fill_ix.clone(), writable_lighthouse_ix],
+            recent_blockhash,
+        );
+        assert_eq!(
+            "Lighthouse instruction accounts must be read-only at index 1",
+            validate_similar_fill_sanitized_message(
+                sanitized_message,
+                original_sanitized_message.clone()
+            )
+            .unwrap_err()
+            .to_string()
+        );
     }
 
     fn build_fill_ix(
