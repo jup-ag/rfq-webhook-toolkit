@@ -25,12 +25,12 @@ const NATIVE_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112
 //
 // If we allow the MemoryWrite instruction, the hacker can drain the signer.
 // https://github.com/Jac0xb/lighthouse/blob/main/programs/lighthouse/lighthouse.json
-const ALLOWED_LIGHTHOUSE_DISCRIMINATORS: &[u8] = &[
-    // 0 .. CAUTION - If we allow the MemoryWrite instruction, the hacker can drain the signer.
-    5, // AssertAccountInfo
-    6, // AssertAccountInfoMulti
-    9, // AssertTokenAccount
-    10, // AssertTokenAccountMulti
+const ALLOWED_LIGHTHOUSE_DISCRIMINATORS: &[&[u8]] = &[
+    // &[0] .. CAUTION - If we allow the MemoryWrite instruction, the hacker can drain the signer.
+    &[5], // AssertAccountInfo
+    &[6], // AssertAccountInfoMulti
+    &[9], // AssertTokenAccount
+    &[10], // AssertTokenAccountMulti
 ];
 
 pub struct Order {
@@ -535,7 +535,7 @@ pub fn validate_similar_fill_sanitized_message(
             format!("Invalid Lighthouse instruction discriminator at index {real_index}")
         })?;
         ensure!(
-            ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(&discriminator[0]),
+            ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(&discriminator.as_slice()),
             "Invalid Lighthouse instruction discriminator at index {real_index}"
         );
 
