@@ -1,4 +1,4 @@
-use crate::order_engine;
+use crate::{account_pubkeys, order_engine};
 use crate::parse_util::{split_disc1byte_and_bytes, split_disc_and_bytes};
 use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
 use anchor_spl::{
@@ -14,7 +14,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     system_instruction::SystemInstruction,
     system_program,
-    sysvar::instructions::BorrowedInstruction,
+    sysvar::instructions::{BorrowedAccountMeta, BorrowedInstruction},
 };
 
 const LIGHTHOUSE_PROGRAM_ID: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95");
@@ -113,6 +113,8 @@ pub fn validate_fill_sanitized_message(
         data,
     } in sanitized_message.decompile_instructions()
     {
+        let pubkeys = account_pubkeys(&accounts);
+
         if program_id == &compute_budget::ID {
             // Compute budget should have been driven from the fee payer, certainly need to validate
             let compute_budget_ix = try_from_slice_unchecked::<ComputeBudgetInstruction>(data)?;
@@ -139,8 +141,13 @@ pub fn validate_fill_sanitized_message(
             );
 
             // We verify the taker is paying for the token account
-            // TODO pull up accounts.first()
-            ensure!(accounts.first().map(|am| am.pubkey) != Some(&order.maker));
+            let [funder, ..] = pubkeys.as_slice() else {
+                bail!("Not enough accounts in create associated token account");
+            };
+            ensure!(
+                funder != &order.maker,
+                "Associated token account funder must not be the maker"
+            );
         } else if program_id == &order_engine::ID {
             ensure!(!fill_ix_found, "Duplicated fill instruction");
             fill_ix_found = true;
@@ -153,7 +160,6 @@ pub fn validate_fill_sanitized_message(
                 "Not a fill discriminator"
             );
 
-            let pubkeys = accounts.into_iter().map(|a| *a.pubkey).collect::<Vec<_>>();
             let [taker, maker, _taker_input_mint_token_account, _maker_input_mint_token_account, taker_output_mint_token_account, _maker_output_mint_token_account, input_mint, _input_token_program, output_mint, output_token_program, ..] =
                 pubkeys.as_slice()
             else {
@@ -188,17 +194,14 @@ pub fn validate_fill_sanitized_message(
             else {
                 bail!("Unexpected system program instruction");
             };
-            let [from, to, ..] = accounts.as_slice() else {
+            let [from, to, ..] = pubkeys.as_slice() else {
                 bail!("Not enough accounts in system transfer");
             };
 
-            ensure!(
-                *from.pubkey == order.taker,
-                "System transfer source must be taker"
-            );
+            ensure!(from == &order.taker, "System transfer source must be taker");
 
             let is_integrator_transfer = expected_integrator
-                .map(|i| *to.pubkey == i.destination)
+                .map(|i| to == &i.destination)
                 .unwrap_or(false);
             if is_integrator_transfer {
                 let integrator = expected_integrator.expect("checked just above");
@@ -223,7 +226,7 @@ pub fn validate_fill_sanitized_message(
                     "Unexpected system_program transfer for non-native output"
                 );
                 ensure!(
-                    *to.pubkey == receiver,
+                    to == &receiver,
                     "Receiver transfer destination must be the receiver"
                 );
                 ensure!(
@@ -239,11 +242,11 @@ pub fn validate_fill_sanitized_message(
                 TokenInstruction::SyncNative => {
                     let integrator =
                         expected_integrator.context("Unexpected sync_native instruction")?;
-                    let [account, ..] = accounts.as_slice() else {
+                    let [account, ..] = pubkeys.as_slice() else {
                         bail!("Not enough accounts in sync_native");
                     };
                     ensure!(
-                        *account.pubkey == integrator.destination,
+                        account == &integrator.destination,
                         "sync_native must target the integrator destination"
                     );
                     ensure!(
@@ -257,11 +260,11 @@ pub fn validate_fill_sanitized_message(
                     integrator_sync_native_validated = true;
                 }
                 TokenInstruction::TransferChecked { amount, decimals } => {
-                    let [source, mint, destination, authority, ..] = accounts.as_slice() else {
+                    let [source, mint, destination, authority, ..] = pubkeys.as_slice() else {
                         bail!("Not enough accounts in transfer_checked");
                     };
                     let is_integrator_transfer = expected_integrator
-                        .map(|i| *destination.pubkey == i.destination)
+                        .map(|i| destination == &i.destination)
                         .unwrap_or(false);
                     if is_integrator_transfer {
                         let integrator = expected_integrator.expect("checked just above");
@@ -270,7 +273,7 @@ pub fn validate_fill_sanitized_message(
                             "Duplicated integrator-fee transfer"
                         );
                         ensure!(
-                            *authority.pubkey == order.taker,
+                            authority == &order.taker,
                             "Integrator-fee transfer authority must be the taker"
                         );
                         ensure!(
@@ -303,19 +306,19 @@ pub fn validate_fill_sanitized_message(
                             program_id,
                         );
                         ensure!(
-                            *source.pubkey == fill.taker_output_mint_token_account,
+                            source == &fill.taker_output_mint_token_account,
                             "Receiver transfer source must be the taker output token account from the fill ix"
                         );
                         ensure!(
-                            *mint.pubkey == order.output_mint,
+                            mint == &order.output_mint,
                             "Receiver transfer mint must equal output_mint"
                         );
                         ensure!(
-                            *destination.pubkey == expected_destination,
+                            destination == &expected_destination,
                             "Receiver transfer destination must be the receiver's ATA"
                         );
                         ensure!(
-                            *authority.pubkey == order.taker,
+                            authority == &order.taker,
                             "Receiver transfer authority must be the taker"
                         );
                         ensure!(
@@ -493,17 +496,15 @@ pub fn validate_similar_fill_sanitized_message(
 
             let fill_ix = order_engine::client::args::Fill::deserialize(&mut ix_data)
                 .map_err(|e| anyhow!("Invalid fill ix data {e}"))?;
+
             // We check if the taker has enough balance to fill the order first
-            let taker = accounts.first().context("Invalid fill ix data")?.pubkey;
-            let input_mint = accounts.get(6).context("Invalid fill ix data")?.pubkey;
-            let output_mint = accounts.get(8).context("Invalid fill ix data")?.pubkey;
+            let pubkeys = account_pubkeys(&accounts);
+            let [taker, _maker, taker_input_mint_token_account, _maker_input_mint_token_account, _taker_output_mint_token_account, _maker_output_mint_token_account, input_mint, _input_token_program, output_mint, ..] =
+                pubkeys.as_slice()
+            else {
+                bail!("Not enough accounts in fill instruction");
+            };
 
-            let taker_input_mint_token_account = accounts
-                .get(2)
-                .context("Invalid taker input mint token account ix data")?
-                .pubkey;
-
-            ensure!(validated_similar_fill.is_none(), "Multiple fill instruction while expecting only one");
             validated_similar_fill = Some(ValidatedSimilarFill {
                 taker: *taker,
                 input_amount: fill_ix.input_amount,
