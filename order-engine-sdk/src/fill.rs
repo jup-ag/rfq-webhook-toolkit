@@ -503,7 +503,6 @@ pub fn validate_similar_fill_sanitized_message(
                 .context("Invalid taker input mint token account ix data")?
                 .pubkey;
 
-            // TODO assert that this is not set here already
             ensure!(validated_similar_fill.is_none(), "Multiple fill instruction while expecting only one");
             validated_similar_fill = Some(ValidatedSimilarFill {
                 taker: *taker,
