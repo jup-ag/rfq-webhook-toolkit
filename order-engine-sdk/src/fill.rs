@@ -711,7 +711,7 @@ mod tests {
         let lighthouse_ix = Instruction {
             program_id: LIGHTHOUSE_PROGRAM_ID,
             accounts: vec![AccountMeta::new_readonly(input_mint, false)],
-            data: vec![5],
+            data: vec![5], // need to use a whitelisted discriminator to pass the first check
         };
         let sanitized_message = make_sanitized_transaction(
             &maker,
