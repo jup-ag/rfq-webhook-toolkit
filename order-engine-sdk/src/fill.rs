@@ -569,14 +569,14 @@ mod tests {
         let input_amount = 100;
         let expire_at = 1000;
         let input_mint = Pubkey::new_unique();
-        let taker_input_mint_token_account = Some(Pubkey::new_unique());
+        let taker_input_mint_token_account = Pubkey::new_unique();
 
         let fill_ix = Instruction {
             program_id: order_engine::ID,
             accounts: order_engine::client::accounts::Fill {
                 taker,
                 maker,
-                taker_input_mint_token_account,
+                taker_input_mint_token_account: Some(taker_input_mint_token_account),
                 maker_input_mint_token_account: Some(Pubkey::new_unique()),
                 taker_output_mint_token_account: Some(Pubkey::new_unique()),
                 maker_output_mint_token_account: Some(Pubkey::new_unique()),
@@ -603,8 +603,7 @@ mod tests {
             input_amount,
             input_mint,
             output_mint: fill_ix.accounts[8].pubkey,
-            taker_input_mint_token_account: taker_input_mint_token_account
-                .unwrap_or(order_engine::ID),
+            taker_input_mint_token_account,
             expire_at,
         };
 
@@ -729,6 +728,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_fill_ix(
         taker: Pubkey,
         maker: Pubkey,

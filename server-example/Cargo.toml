@@ -35,3 +35,6 @@ solana-sdk = { workspace = true }
 dotenvy = { workspace = true }
 utoipauto = { workspace = true }
 solana-rpc-client = { workspace = true }
+
+[lints]
+workspace = true
