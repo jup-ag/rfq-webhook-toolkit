@@ -621,7 +621,7 @@ pub async fn process_instructions(
     signers: &[&Keypair],
     banks_client: &Mutex<BanksClient>,
 ) -> std::result::Result<(), BanksClientError> {
-    let mut banks_client = banks_client.lock().await;
+    let banks_client = banks_client.lock().await;
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
 
     let mut all_signers = vec![payer];
