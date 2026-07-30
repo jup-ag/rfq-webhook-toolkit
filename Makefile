@@ -5,7 +5,7 @@ cargofix:
 	cargo fix
 	# might need to use +nightly later if we want more rules
 	cargo fmt --all
-	cargo clippy --fix --all-targets -- -D warning
+	cargo clippy --fix --all-targets -- -D warnings
 
 run-example-server:
 	@echo "Running RFQ API..."
