@@ -307,7 +307,7 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
 
     let banks_client = Arc::new(Mutex::new(banks_client));
     let client = Arc::new(ProgramBanksClient::new_from_client(
-        banks_client.clone(),
+        Arc::clone(&banks_client),
         ProgramBanksClientProcessTransaction,
     ));
 
@@ -341,7 +341,8 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
     let TestMode {
         taker_accounts,
         maker_accounts,
-        expected_error,
+        // asserted by the caller, which clones it before `prepare_test` consumes `test_mode`
+        expected_error: _,
         input_mint_extensions,
         output_mint_extensions,
     } = test_mode;
@@ -460,11 +461,11 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         anchor_spl::token::ID
     };
     let token_a = Token::new(
-        client.clone(),
+        Arc::<ProgramBanksClient<ProgramBanksClientProcessTransaction>>::clone(&client),
         &token_a_program_id,
         &mint_a,
         Some(9),
-        payer.clone(),
+        Arc::<Keypair>::clone(&payer),
     );
     if let Some(mint_a_keypair) = &mint_a_keypair {
         token_a
@@ -484,11 +485,11 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
         anchor_spl::token::ID
     };
     let token_b = Token::new(
-        client.clone(),
+        Arc::<ProgramBanksClient<ProgramBanksClientProcessTransaction>>::clone(&client),
         &token_b_program_id,
         &mint_b,
         Some(9),
-        payer.clone(),
+        Arc::<Keypair>::clone(&payer),
     );
     if let Some(mint_b_keypair) = &mint_b_keypair {
         token_b
@@ -621,7 +622,7 @@ pub async fn process_instructions(
     signers: &[&Keypair],
     banks_client: &Mutex<BanksClient>,
 ) -> std::result::Result<(), BanksClientError> {
-    let mut banks_client = banks_client.lock().await;
+    let banks_client = banks_client.lock().await;
     let recent_blockhash = banks_client.get_latest_blockhash().await.unwrap();
 
     let mut all_signers = vec![payer];
