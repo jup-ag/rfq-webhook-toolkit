@@ -21,7 +21,7 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 /// Splits an 8-byte discriminator (anchor style) off the front, returning `(disc, remaining_bytes)`.
-pub fn split_disc_and_bytes(bytes: &[u8]) -> Result<(&[u8; 8], &[u8]), ParseError> {
+pub fn split_disc8bytes_and_bytes(bytes: &[u8]) -> Result<(&[u8; 8], &[u8]), ParseError> {
     bytes
         .split_first_chunk::<8>()
         .ok_or(ParseError::NotEnoughBytes {
@@ -51,7 +51,7 @@ mod tests {
     #[test]
     fn test_split_disc_and_bytes_exact_length_leaves_no_remainder() {
         let bytes = [1, 2, 3, 4, 5, 6, 7, 8];
-        let (disc, remaining) = split_disc_and_bytes(&bytes).unwrap();
+        let (disc, remaining) = split_disc8bytes_and_bytes(&bytes).unwrap();
         assert_eq!(disc, &[1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(remaining, &[] as &[u8]);
     }
@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn test_split_disc_and_bytes_splits_at_the_eighth_byte() {
         let bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-        let (disc, remaining) = split_disc_and_bytes(&bytes).unwrap();
+        let (disc, remaining) = split_disc8bytes_and_bytes(&bytes).unwrap();
         assert_eq!(disc, &[1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(remaining, &[9, 10, 11]);
     }
@@ -68,7 +68,7 @@ mod tests {
     fn test_split_disc_and_bytes_rejects_fewer_than_eight_bytes() {
         for len in 0..8usize {
             let bytes = vec![0xAAu8; len];
-            let err = split_disc_and_bytes(&bytes)
+            let err = split_disc8bytes_and_bytes(&bytes)
                 .expect_err("{len} bytes must not yield an 8-byte discriminator");
             assert_eq!(
                 err.to_string(),
@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_error_reports_expected_and_actual_byte_counts() {
         assert_eq!(
-            split_disc_and_bytes(&[1, 2, 3]).unwrap_err(),
+            split_disc8bytes_and_bytes(&[1, 2, 3]).unwrap_err(),
             ParseError::NotEnoughBytes {
                 expected: 8,
                 actual: 3
@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn test_the_two_helpers_disagree_on_a_single_byte_input() {
         let bytes = [5];
-        assert!(split_disc_and_bytes(&bytes).is_err());
+        assert!(split_disc8bytes_and_bytes(&bytes).is_err());
         assert_eq!(split_disc1byte_and_bytes(&bytes).unwrap().0, &[5]);
     }
 
@@ -144,7 +144,7 @@ mod tests {
     fn test_returned_slices_borrow_from_the_input_buffer() {
         let bytes = [1u8, 2, 3, 4, 5, 6, 7, 8, 9];
 
-        let (disc, remaining) = split_disc_and_bytes(&bytes).unwrap();
+        let (disc, remaining) = split_disc8bytes_and_bytes(&bytes).unwrap();
         assert_eq!(disc.as_ptr(), bytes.as_ptr());
         assert_eq!(remaining.as_ptr(), bytes[8..].as_ptr());
 

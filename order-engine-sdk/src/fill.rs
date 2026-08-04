@@ -1,4 +1,4 @@
-use crate::parse_util::{split_disc1byte_and_bytes, split_disc_and_bytes};
+use crate::parse_util::{split_disc1byte_and_bytes, split_disc8bytes_and_bytes};
 use crate::{account_pubkeys, order_engine};
 use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
 use anchor_spl::{
@@ -154,7 +154,7 @@ pub fn validate_fill_sanitized_message(
 
             // Must slice off anchor's discriminator first
             let (discriminator, mut ix_data) =
-                split_disc_and_bytes(data).context("Not enough data in fill instruction")?;
+                split_disc8bytes_and_bytes(data)?;
             ensure!(
                 discriminator.as_slice() == order_engine::client::args::Fill::DISCRIMINATOR,
                 "Not a fill discriminator"
@@ -488,7 +488,7 @@ pub fn validate_similar_fill_sanitized_message(
                 "Duplicated fill instruction"
             );
             let (discriminator, mut ix_data) =
-                split_disc_and_bytes(data).context("Not enough data in fill instruction")?;
+                split_disc8bytes_and_bytes(data)?;
             ensure!(
                 discriminator.as_slice() == order_engine::client::args::Fill::DISCRIMINATOR,
                 "Not a fill discriminator"
