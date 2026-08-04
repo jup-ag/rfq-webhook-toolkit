@@ -1,4 +1,11 @@
-.PHONY: run-server-example
+.PHONY: cargofix run-server-example
+
+cargofix:
+	@echo "Run Fmt+Clippy Fix ...."
+	cargo fix
+	# might need to use +nightly later if we want more rules
+	cargo fmt --all
+	cargo clippy --fix --all-targets -- -D warnings
 
 run-example-server:
 	@echo "Running RFQ API..."
