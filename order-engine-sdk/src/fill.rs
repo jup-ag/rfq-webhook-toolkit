@@ -1,4 +1,5 @@
-use crate::order_engine;
+use crate::parse_util::{split_disc1byte_and_bytes, split_disc8bytes_and_bytes};
+use crate::{account_pubkeys, order_engine};
 use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
 use anchor_spl::{
     associated_token::{self, get_associated_token_address_with_program_id},
@@ -20,10 +21,17 @@ const LIGHTHOUSE_PROGRAM_ID: Pubkey = pubkey!("L2TExMFKdjpN9kozasaurPirfHy9P8sbX
 const NATIVE_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
 
 // We only allow certain instruction from the Lighthouse program.
+// Logic also checks that all accounts are read-only.
 //
 // If we allow the MemoryWrite instruction, the hacker can drain the signer.
 // https://github.com/Jac0xb/lighthouse/blob/main/programs/lighthouse/lighthouse.json
-const ALLOWED_LIGHTHOUSE_DISCRIMINATORS: &[u8] = &[5, 6, 9, 10];
+const ALLOWED_LIGHTHOUSE_DISCRIMINATORS: &[&[u8]] = &[
+    // &[0] .. CAUTION - If we allow the MemoryWrite instruction, the hacker can drain the signer.
+    &[5], // AssertAccountInfo
+    &[6], // AssertAccountInfoMulti
+    &[9], // AssertTokenAccount
+    &[10], // AssertTokenAccountMulti
+];
 
 pub struct Order {
     pub taker: Pubkey,
@@ -105,6 +113,8 @@ pub fn validate_fill_sanitized_message(
         data,
     } in sanitized_message.decompile_instructions()
     {
+        let pubkeys = account_pubkeys(&accounts);
+
         if program_id == &compute_budget::ID {
             // Compute budget should have been driven from the fee payer, certainly need to validate
             let compute_budget_ix = try_from_slice_unchecked::<ComputeBudgetInstruction>(data)?;
@@ -122,27 +132,34 @@ pub fn validate_fill_sanitized_message(
                 _ => bail!("Unexpected compute budget instruction"),
             }
         } else if program_id == &associated_token::ID {
-            // For simplicity we only allow create ata idempotent
+            // For simplicity, we only allow create ata idempotent
+            let (discriminator, _) = split_disc1byte_and_bytes(data)
+                .context("Incorrect associated token account program data")?;
             ensure!(
-                data == vec![1],
+                discriminator == &[1],
                 "Incorrect associated token account program data"
             );
 
             // We verify the taker is paying for the token account
-            ensure!(accounts.first().map(|am| am.pubkey) != Some(&order.maker));
+            let [funder, ..] = pubkeys.as_slice() else {
+                bail!("Not enough accounts in create associated token account");
+            };
+            ensure!(
+                funder != &order.maker,
+                "Associated token account funder must not be the maker"
+            );
         } else if program_id == &order_engine::ID {
             ensure!(!fill_ix_found, "Duplicated fill instruction");
             fill_ix_found = true;
 
-            ensure!(data.len() >= 8, "Not enough data in fill instruction");
             // Must slice off anchor's discriminator first
-            let (discriminator, mut ix_data) = data.split_at(8);
+            let (discriminator, mut ix_data) =
+                split_disc8bytes_and_bytes(data)?;
             ensure!(
-                discriminator == order_engine::client::args::Fill::DISCRIMINATOR,
+                discriminator.as_slice() == order_engine::client::args::Fill::DISCRIMINATOR,
                 "Not a fill discriminator"
             );
 
-            let pubkeys = accounts.into_iter().map(|a| *a.pubkey).collect::<Vec<_>>();
             let [taker, maker, _taker_input_mint_token_account, _maker_input_mint_token_account, taker_output_mint_token_account, _maker_output_mint_token_account, input_mint, _input_token_program, output_mint, output_token_program, ..] =
                 pubkeys.as_slice()
             else {
@@ -177,17 +194,14 @@ pub fn validate_fill_sanitized_message(
             else {
                 bail!("Unexpected system program instruction");
             };
-            let [from, to, ..] = accounts.as_slice() else {
+            let [from, to, ..] = pubkeys.as_slice() else {
                 bail!("Not enough accounts in system transfer");
             };
 
-            ensure!(
-                *from.pubkey == order.taker,
-                "System transfer source must be taker"
-            );
+            ensure!(from == &order.taker, "System transfer source must be taker");
 
             let is_integrator_transfer = expected_integrator
-                .map(|i| *to.pubkey == i.destination)
+                .map(|i| to == &i.destination)
                 .unwrap_or(false);
             if is_integrator_transfer {
                 let integrator = expected_integrator.expect("checked just above");
@@ -212,7 +226,7 @@ pub fn validate_fill_sanitized_message(
                     "Unexpected system_program transfer for non-native output"
                 );
                 ensure!(
-                    *to.pubkey == receiver,
+                    to == &receiver,
                     "Receiver transfer destination must be the receiver"
                 );
                 ensure!(
@@ -228,11 +242,11 @@ pub fn validate_fill_sanitized_message(
                 TokenInstruction::SyncNative => {
                     let integrator =
                         expected_integrator.context("Unexpected sync_native instruction")?;
-                    let [account, ..] = accounts.as_slice() else {
+                    let [account, ..] = pubkeys.as_slice() else {
                         bail!("Not enough accounts in sync_native");
                     };
                     ensure!(
-                        *account.pubkey == integrator.destination,
+                        account == &integrator.destination,
                         "sync_native must target the integrator destination"
                     );
                     ensure!(
@@ -246,11 +260,11 @@ pub fn validate_fill_sanitized_message(
                     integrator_sync_native_validated = true;
                 }
                 TokenInstruction::TransferChecked { amount, decimals } => {
-                    let [source, mint, destination, authority, ..] = accounts.as_slice() else {
+                    let [source, mint, destination, authority, ..] = pubkeys.as_slice() else {
                         bail!("Not enough accounts in transfer_checked");
                     };
                     let is_integrator_transfer = expected_integrator
-                        .map(|i| *destination.pubkey == i.destination)
+                        .map(|i| destination == &i.destination)
                         .unwrap_or(false);
                     if is_integrator_transfer {
                         let integrator = expected_integrator.expect("checked just above");
@@ -259,7 +273,7 @@ pub fn validate_fill_sanitized_message(
                             "Duplicated integrator-fee transfer"
                         );
                         ensure!(
-                            *authority.pubkey == order.taker,
+                            authority == &order.taker,
                             "Integrator-fee transfer authority must be the taker"
                         );
                         ensure!(
@@ -292,19 +306,19 @@ pub fn validate_fill_sanitized_message(
                             program_id,
                         );
                         ensure!(
-                            *source.pubkey == fill.taker_output_mint_token_account,
+                            source == &fill.taker_output_mint_token_account,
                             "Receiver transfer source must be the taker output token account from the fill ix"
                         );
                         ensure!(
-                            *mint.pubkey == order.output_mint,
+                            mint == &order.output_mint,
                             "Receiver transfer mint must equal output_mint"
                         );
                         ensure!(
-                            *destination.pubkey == expected_destination,
+                            destination == &expected_destination,
                             "Receiver transfer destination must be the receiver's ATA"
                         );
                         ensure!(
-                            *authority.pubkey == order.taker,
+                            authority == &order.taker,
                             "Receiver transfer authority must be the taker"
                         );
                         ensure!(
@@ -373,6 +387,7 @@ pub fn validate_similar_fill_sanitized_message(
         original_message_header.num_required_signatures == message_header.num_required_signatures,
         "Number of required signatures did not match"
     );
+    // TODO use zip! here
     let mut account_keys_iter = sanitized_message.account_keys().iter();
     for original_signer in original_sanitized_message
         .account_keys()
@@ -472,24 +487,23 @@ pub fn validate_similar_fill_sanitized_message(
                 validated_similar_fill.is_none(),
                 "Duplicated fill instruction"
             );
-            ensure!(data.len() >= 8, "Not enough data in fill instruction");
-            let (discriminator, mut ix_data) = data.split_at(8);
+            let (discriminator, mut ix_data) =
+                split_disc8bytes_and_bytes(data)?;
             ensure!(
-                discriminator == order_engine::client::args::Fill::DISCRIMINATOR,
+                discriminator.as_slice() == order_engine::client::args::Fill::DISCRIMINATOR,
                 "Not a fill discriminator"
             );
 
             let fill_ix = order_engine::client::args::Fill::deserialize(&mut ix_data)
                 .map_err(|e| anyhow!("Invalid fill ix data {e}"))?;
-            // We check if the taker has enough balance to fill the order first
-            let taker = accounts.first().context("Invalid fill ix data")?.pubkey;
-            let input_mint = accounts.get(6).context("Invalid fill ix data")?.pubkey;
-            let output_mint = accounts.get(8).context("Invalid fill ix data")?.pubkey;
 
-            let taker_input_mint_token_account = accounts
-                .get(2)
-                .context("Invalid taker input mint token account ix data")?
-                .pubkey;
+            // We check if the taker has enough balance to fill the order first
+            let pubkeys = account_pubkeys(&accounts);
+            let [taker, _maker, taker_input_mint_token_account, _maker_input_mint_token_account, _taker_output_mint_token_account, _maker_output_mint_token_account, input_mint, _input_token_program, output_mint, ..] =
+                pubkeys.as_slice()
+            else {
+                bail!("Not enough accounts in fill instruction");
+            };
 
             validated_similar_fill = Some(ValidatedSimilarFill {
                 taker: *taker,
@@ -507,7 +521,7 @@ pub fn validate_similar_fill_sanitized_message(
         index,
         BorrowedInstruction {
             program_id,
-            accounts: _,
+            accounts,
             data,
         },
     ) in sanitized_instructions_iter.enumerate()
@@ -518,11 +532,17 @@ pub fn validate_similar_fill_sanitized_message(
             "Additional instructions can only be from Lighthouse program at {real_index}"
         );
 
+        let (discriminator, _) = split_disc1byte_and_bytes(data).with_context(|| {
+            format!("Invalid Lighthouse instruction discriminator at index {real_index}")
+        })?;
         ensure!(
-            data.first()
-                .map(|discriminator| ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(discriminator))
-                .unwrap_or(false),
+            ALLOWED_LIGHTHOUSE_DISCRIMINATORS.contains(&discriminator.as_slice()),
             "Invalid Lighthouse instruction discriminator at index {real_index}"
+        );
+
+        ensure!(
+            accounts.iter().all(|account| !account.is_writable),
+            "Lighthouse instruction accounts must be read-only at index {real_index}"
         );
     }
 
@@ -693,7 +713,7 @@ mod tests {
         let lighthouse_ix = Instruction {
             program_id: LIGHTHOUSE_PROGRAM_ID,
             accounts: vec![AccountMeta::new_readonly(input_mint, false)],
-            data: vec![5],
+            data: vec![5], // need to use a whitelisted discriminator to pass the first check
         };
         let sanitized_message = make_sanitized_transaction(
             &maker,
@@ -719,6 +739,27 @@ mod tests {
         );
         assert_eq!(
             "Invalid Lighthouse instruction discriminator at index 1",
+            validate_similar_fill_sanitized_message(
+                sanitized_message,
+                original_sanitized_message.clone()
+            )
+            .unwrap_err()
+            .to_string()
+        );
+
+        // Add lighthouse instruction with a writable account
+        let writable_lighthouse_ix = Instruction {
+            program_id: LIGHTHOUSE_PROGRAM_ID,
+            accounts: vec![AccountMeta::new(Pubkey::new_unique(), false)],
+            data: vec![5],
+        };
+        let sanitized_message = make_sanitized_transaction(
+            &maker,
+            &[fill_ix.clone(), writable_lighthouse_ix],
+            recent_blockhash,
+        );
+        assert_eq!(
+            "Lighthouse instruction accounts must be read-only at index 1",
             validate_similar_fill_sanitized_message(
                 sanitized_message,
                 original_sanitized_message.clone()
