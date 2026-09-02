@@ -11,4 +11,9 @@ export const MINT_A = process.env.MINT_A || WSOL;
 export const MINT_B = process.env.MINT_B || USDC;
 export const FEE_BPS = process.env.FEE_BPS || 2;
 
+// Routers excluded from quote requests so the webhook under test is the only
+// liquidity source (issue #49). When Jupiter adds a new router, update this
+// single line; keep in sync with the `router` enum in the /order docs:
+// https://developers.jup.ag/docs/swap/order-and-execute
+export const EXCLUDED_ROUTERS = 'metis,hashflow,dflow,pyth,okx';
 
