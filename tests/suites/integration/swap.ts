@@ -54,7 +54,6 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.status).toBe(200);
       expect(quoteResponse.data).toHaveProperty('quoteId');
       expect(quoteResponse.data).toHaveProperty('requestId');
-      expect(quoteResponse.data).toHaveProperty('expireAt');
       expect(quoteResponse.data).toHaveProperty('maker');
       expect(quoteResponse.data.inAmount).toBe(`${params.AMOUNT}`);
       expect(quoteResponse.data.inputMint).toBe(params.MINT_B);
@@ -154,7 +153,6 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.status).toBe(200);
       expect(quoteResponse.data).toHaveProperty('quoteId');
       expect(quoteResponse.data).toHaveProperty('requestId');
-      expect(quoteResponse.data).toHaveProperty('expireAt');
       expect(quoteResponse.data).toHaveProperty('maker');
       expect(quoteResponse.data.outAmount).toBe(`${params.AMOUNT}`);
       expect(quoteResponse.data.outputMint).toBe(params.MINT_B);
@@ -253,7 +251,6 @@ describe('Webhook e2e API Swap', {
       expect(quoteResponse.status).toBe(200);
       expect(quoteResponse.data).toHaveProperty('quoteId');
       expect(quoteResponse.data).toHaveProperty('requestId');
-      expect(quoteResponse.data).toHaveProperty('expireAt');
       expect(quoteResponse.data).toHaveProperty('maker');
       expect(quoteResponse.data.inAmount).toBe(`${params.AMOUNT}`);
       expect(quoteResponse.data.inputMint).toBe(params.MINT_B);

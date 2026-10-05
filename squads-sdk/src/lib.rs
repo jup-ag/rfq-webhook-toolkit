@@ -96,6 +96,7 @@ mod tests {
                 vault_pda: vault,
                 members: vec![member],
                 threshold: 1,
+                fee_payer: None,
             },
             Hash::new_unique(),
             400_000,

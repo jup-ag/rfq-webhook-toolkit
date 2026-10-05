@@ -13,3 +13,6 @@ thiserror = { workspace = true }
 [dev-dependencies]
 solana-client = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

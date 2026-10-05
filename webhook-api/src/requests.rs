@@ -43,6 +43,11 @@ pub struct QuoteRequest {
     #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub receiver: Option<String>,
+    /// Where the request originated: `internal` (a Jupiter product) or `integrator` (a third-party
+    /// integrator). Set by the RFQ API; any value supplied by a taker is ignored.
+    #[schema(examples("internal", "integrator"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// Order to be fulfilled by the Market Maker
@@ -56,4 +61,26 @@ pub struct SwapRequest {
     /// Base64 encoded versioned transaction
     #[schema(examples("AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAz9drCWYYQ68kASuBn9OHQMhApFELvj44L1s76RFusqcFQ3u65aig44TQ3Fmb9CadUg6y5zJuBNnD1IxqvKXIPmA4AmO5Dcos4MycwafOIB13mDRFQ1GIRqKG3olkhi48jyGiqvTscHPp0TmqflJdR4gzVibQqwIj1iO1jXHw5Mt99q5m2Edp3glkLYOc/yT1HqD+ndBXyPYu16F84mC8rspYEafRZphIlog6Q2qO4TFgN8ICPW2yl1kkJ2UutYEAxh1w4ztXWtKZr0O736NcYMPOKkRjP8CiDXheWMdaprkzkaA5jAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvEC3LPJppXp/7XKg0lfT6E87hQi8th5zPmi1Q6AAAAAiDuU6+gSRr+Hx/3xlmJE16rC5kSGnxcWkohAAAAAAAg5izz2u1OeCnop+hOiUf4tBZ6V2mJYyUZ0OXgw2U/A4C33oSysI64Na/dJmwBs/WKYt6Nnkl1JWNR65pjlN4nAKWsCeLSm9f59f75OR3BSLGqzUjgzq3orAORpoFbS1sy0skiTfwZdbBKqGpHSo0ZZfwJkHDO1fB4frglAsUPj0YoKeHP5JwEP4awSwmz4vanicFfQDIeA6ZM8UhZEZe0FLBZAAyNq5O0AAAAAAA2AAagQ9iAAAlYAMq28zUDAlb3EiKAFj7JAPtooroIJbdZdUpVUmdUfgBMAAAAAAH4YYwAAAAAAC9MP4tAAAAAAA=="))]
     pub transaction: String,
+    /// Where the request originated: `internal` (a Jupiter product) or `integrator` (a third-party
+    /// integrator). Set by the RFQ API; any value supplied by a taker is ignored.
+    #[schema(examples("internal", "integrator"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_is_optional_on_the_wire() {
+        let json = r#"{"requestId":"r","quoteId":"q","tokenIn":"a","amount":"1","tokenOut":"b","quoteType":"exactIn","protocol":"v1","feeBps":0}"#;
+        let req: QuoteRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.source, None);
+        assert!(!serde_json::to_string(&req).unwrap().contains("source"));
+
+        let with_source = format!(r#"{{"source":"integrator",{}"#, &json[1..]);
+        let req: QuoteRequest = serde_json::from_str(&with_source).unwrap();
+        assert_eq!(req.source.as_deref(), Some("integrator"));
+    }
 }

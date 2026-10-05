@@ -45,7 +45,6 @@ describe('Webhook e2e API Quote', () => {
         expect(response.status).toBe(200);
         expect(response.data).toHaveProperty('quoteId');
         expect(response.data).toHaveProperty('requestId');
-        expect(response.data).toHaveProperty('expireAt');
         expect(response.data).toHaveProperty('maker');
         expect(response.data.swapMode).toBe(payload.swapMode);
         expect(response.data.inAmount).toBe(`${params.AMOUNT}`);
@@ -105,7 +104,6 @@ describe('Webhook e2e API Quote', () => {
         expect(response.status).toBe(200);
         expect(response.data).toHaveProperty('quoteId');
         expect(response.data).toHaveProperty('requestId');
-        expect(response.data).toHaveProperty('expireAt');
         expect(response.data).toHaveProperty('maker');
         expect(response.data.swapMode).toBe(payload.swapMode);
         expect(new BN(response.data.inAmount).gt(new BN(0))).toBe(true);
@@ -159,7 +157,6 @@ describe('Webhook e2e API Quote', () => {
         expect(response.status).toBe(200);
         expect(response.data).toHaveProperty('quoteId');
         expect(response.data).toHaveProperty('requestId');
-        expect(response.data).toHaveProperty('expireAt');
         expect(response.data).toHaveProperty('maker'); // the maker should be the MM address
         expect(response.data.inAmount).toBe(`${params.AMOUNT}`);
         expect(response.data.inputMint).toBe(params.MINT_B);

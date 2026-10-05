@@ -61,3 +61,35 @@ metrics = { version = "0.24.1", default-features = false }
 metrics-exporter-prometheus = { version = "0.16.2", default-features = false }
 dotenvy = "0.15.7"
 utoipauto = "0.2.0"
+
+
+[workspace.lints.clippy]
+# should make procedural code more readable
+needless_return = "allow"
+# allow explicit testing
+bool_assert_comparison = "allow"
+# allow `len() checks`
+len_zero = "allow"
+# allow to use `match` to make code look consistent
+single_match = "allow"
+# allow use of base struct; needed for forward compatibility
+needless_update = "allow"
+# allow explict impl of `Default` trait
+derivable_impls = "allow"
+# allow +1 comparison
+int_plus_one = "allow"
+# allow structured `if`
+collapsible_if = "allow"
+# force use of `Arc::clone(p)` for clarity
+clone_on_ref_ptr = "deny"
+# prefer `copy` over reference for small types
+trivially_copy_pass_by_ref = "deny"
+# large error variant kept unboxed to preserve thiserror `#[from]` ergonomics
+result_large_err = "allow"
+
+[workspace.lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    'cfg(target_os, values("solana"))',
+]
+

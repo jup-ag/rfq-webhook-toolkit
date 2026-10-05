@@ -172,6 +172,7 @@ async fn example_quote(
                 maker: maker_pubkey,
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
                 receiver: quote_request.receiver.clone(),
+                source: quote_request.source.clone(),
             }
         }
         QuoteType::ExactOut => {
@@ -189,6 +190,7 @@ async fn example_quote(
                 maker: maker_pubkey,
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
                 receiver: quote_request.receiver.clone(),
+                source: quote_request.source.clone(),
             }
         }
     };
@@ -234,18 +236,21 @@ async fn example_swap(
             quote_id: quote_request.quote_id.clone(),
             state: SwapState::Rejected,
             rejection_reason: Some("<rejection reason>".to_string()),
+            source: quote_request.source.clone(),
         })),
         SIMULATE_INSUFFICIENT_BALANCE => Ok(Json(SwapResponse {
             tx_signature: None,
             quote_id: quote_request.quote_id.clone(),
             state: SwapState::RejectedWithReason(RejectionReason::InsufficientBalance),
             rejection_reason: None,
+            source: quote_request.source.clone(),
         })),
         SIMULATE_SIGNATURE_VERIFICATION_FAILED => Ok(Json(SwapResponse {
             tx_signature: None,
             quote_id: quote_request.quote_id.clone(),
             state: SwapState::RejectedWithReason(RejectionReason::SignatureVerificationFailed),
             rejection_reason: None,
+            source: quote_request.source.clone(),
         })),
         SIMULATE_MALFORMED => Err(ApiError::BadRequest("Malformed request".to_string())),
         _ => {
@@ -306,6 +311,7 @@ async fn example_swap(
                 quote_id: quote_request.quote_id.clone(),
                 state: SwapState::Accepted,
                 rejection_reason: None,
+                source: quote_request.source.clone(),
             }))
         }
     }

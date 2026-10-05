@@ -39,6 +39,10 @@ pub struct QuoteResponse {
     #[schema(examples("5v2Vd71VoJ1wZhz1PkhTY48mrJwS6wF4LfvDbYPnJ3bc"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub receiver: Option<String>,
+    /// Echo of the request's `source`, when provided.
+    #[schema(examples("internal", "integrator"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// Response to a swap request to the Market Maker
@@ -55,6 +59,10 @@ pub struct SwapResponse {
     /// Optional message to provide more context when the swap is rejected
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rejection_reason: Option<String>,
+    /// Echo of the request's `source`, when provided.
+    #[schema(examples("internal", "integrator"))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]

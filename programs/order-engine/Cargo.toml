@@ -20,11 +20,8 @@ anchor-debug = []
 custom-panic = []
 production = []
 
-[lints.rust.unexpected_cfgs]
-level = "warn"
-check-cfg = [
-    'cfg(target_os, values("solana"))',
-]
+[lints]
+workspace = true
 
 [dependencies]
 anchor-lang = { workspace = true }

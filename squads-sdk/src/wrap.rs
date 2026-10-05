@@ -92,8 +92,20 @@ pub fn build_squads_wrapped_transaction(
         data,
     };
 
+    let fee_payer = match config.fee_payer {
+        Some(pk) => {
+            if !config.members.contains(&pk) && !other_signer_pubkeys.contains(&pk) {
+                return Err(SquadsSdkError::InvalidConfig(format!(
+                    "fee_payer {pk} must be a multisig member or a signer on the swap instructions"
+                )));
+            }
+            pk
+        }
+        None => config.members[0],
+    };
+
     let message = message::v0::Message::try_compile(
-        &config.members[0],
+        &fee_payer,
         &[
             ComputeBudgetInstruction::set_compute_unit_limit(compute_unit_limit),
             ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
@@ -281,6 +293,7 @@ mod tests {
                 vault_pda: vault,
                 members: vec![member_a, member_b],
                 threshold: 2,
+                fee_payer: None,
             },
             Hash::new_unique(),
             400_000,
@@ -317,6 +330,7 @@ mod tests {
                 vault_pda: vault,
                 members: vec![member_a, member_b, member_c],
                 threshold: 2, // 2-of-3
+                fee_payer: None,
             },
             Hash::new_unique(),
             400_000,
@@ -411,6 +425,7 @@ mod tests {
                 vault_pda: vault,
                 members: vec![member_a, member_b],
                 threshold: 2,
+                fee_payer: None,
             },
             Hash::new_unique(),
             400_000,
@@ -458,6 +473,7 @@ mod tests {
                 vault_pda: vault,
                 members: vec![member_a, member_b],
                 threshold: 2,
+                fee_payer: None,
             },
             Hash::new_unique(),
             400_000,
@@ -488,6 +504,7 @@ mod tests {
             vault_pda: Pubkey::new_unique(),
             members: vec![],
             threshold: 1,
+            fee_payer: None,
         };
         assert!(config.validate().is_err());
     }
@@ -499,6 +516,7 @@ mod tests {
             vault_pda: Pubkey::new_unique(),
             members: vec![Pubkey::new_unique()],
             threshold: 2,
+            fee_payer: None,
         };
         assert!(config.validate().is_err());
     }
@@ -510,6 +528,7 @@ mod tests {
             vault_pda: Pubkey::new_unique(),
             members: vec![Pubkey::new_unique()],
             threshold: 0,
+            fee_payer: None,
         };
         assert!(config.validate().is_err());
     }
@@ -541,6 +560,7 @@ mod tests {
                 vault_pda: vault,
                 members: vec![member_a, member_b],
                 threshold: 2,
+                fee_payer: None,
             },
             Hash::new_unique(),
             400_000,
@@ -563,6 +583,83 @@ mod tests {
             }
             _ => panic!("expected v0 message"),
         }
+    }
+
+    #[test]
+    fn fee_payer_override_makes_non_member_signer_the_fee_payer() {
+        // RFQ squads flow: the RFQ maker is a signer on the inner Fill instruction
+        // and should pay the outer-tx gas (not the multisig members). The caller
+        // sets `fee_payer: Some(maker)` to opt into that ordering.
+        let (settings, vault, member_a, member_b, _, swap_program, token_program, user_ata) =
+            test_pubkeys();
+        let maker = pubkey!("BfvJHsm36WTTbMXFqBUfKZJGDqnSrvGnRWAT4WHQFcVP");
+
+        let swap_ix = Instruction {
+            program_id: swap_program,
+            accounts: vec![
+                AccountMeta::new(vault, true),
+                AccountMeta::new(maker, true),
+                AccountMeta::new(user_ata, false),
+                AccountMeta::new_readonly(token_program, false),
+            ],
+            data: vec![1, 2, 3],
+        };
+
+        let tx = build_squads_wrapped_transaction(
+            &[swap_ix],
+            &SquadsWrapConfig {
+                settings_pda: settings,
+                vault_pda: vault,
+                members: vec![member_a, member_b],
+                threshold: 2,
+                fee_payer: Some(maker),
+            },
+            Hash::new_unique(),
+            400_000,
+            500_000,
+        )
+        .expect("build should succeed with explicit fee_payer override");
+
+        match &tx.message {
+            VersionedMessage::V0(message) => {
+                assert_eq!(
+                    message.account_keys[0], maker,
+                    "fee_payer override should make maker signer[0]"
+                );
+                let signer_keys =
+                    &message.account_keys[..message.header.num_required_signatures as usize];
+                assert!(signer_keys.contains(&member_a));
+                assert!(signer_keys.contains(&member_b));
+            }
+            _ => panic!("expected v0 message"),
+        }
+    }
+
+    #[test]
+    fn fee_payer_override_rejects_unrelated_pubkey() {
+        let (settings, vault, member_a, member_b, _, swap_program, token_program, user_ata) =
+            test_pubkeys();
+        let unrelated = pubkey!("BfvJHsm36WTTbMXFqBUfKZJGDqnSrvGnRWAT4WHQFcVP");
+        let swap_ix = simple_swap_ix(vault, user_ata, token_program, swap_program);
+
+        let err = build_squads_wrapped_transaction(
+            &[swap_ix],
+            &SquadsWrapConfig {
+                settings_pda: settings,
+                vault_pda: vault,
+                members: vec![member_a, member_b],
+                threshold: 2,
+                fee_payer: Some(unrelated),
+            },
+            Hash::new_unique(),
+            400_000,
+            500_000,
+        )
+        .expect_err("fee_payer not in members or swap signers should be rejected");
+        assert!(
+            matches!(err, SquadsSdkError::InvalidConfig(_)),
+            "expected InvalidConfig, got {err:?}"
+        );
     }
 
     #[test]
@@ -602,6 +699,7 @@ mod tests {
             vault_pda: vault,
             members: vec![member_a, member_b],
             threshold: 2,
+            fee_payer: None,
         };
 
         let err = wrap_transaction_base64(&quote_b64, &config, &WrapOptions::default())
