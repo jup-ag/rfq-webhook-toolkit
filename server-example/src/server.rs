@@ -173,6 +173,7 @@ async fn example_quote(
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
                 receiver: quote_request.receiver.clone(),
                 source: quote_request.source.clone(),
+                flash_fill: None,
             }
         }
         QuoteType::ExactOut => {
@@ -191,6 +192,7 @@ async fn example_quote(
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
                 receiver: quote_request.receiver.clone(),
                 source: quote_request.source.clone(),
+                flash_fill: None,
             }
         }
     };
