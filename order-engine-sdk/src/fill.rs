@@ -111,7 +111,6 @@ fn validate_fill_inner(
 
     let expected_receiver = order.receiver.filter(|r| r != &order.taker);
     let expected_integrator = order.integrator_fee.as_ref();
-    let mut fill_ix_found = false;
     let mut receiver_transfer_found = false;
     let mut integrator_fee_validated = false;
     let mut integrator_used_native_path = false;
@@ -156,8 +155,7 @@ fn validate_fill_inner(
             // We verify the taker is paying for the token account
             ensure!(accounts.first().map(|am| am.pubkey) != Some(&order.maker));
         } else if program_id == &order_engine::ID {
-            ensure!(!fill_ix_found, "Duplicated fill instruction");
-            fill_ix_found = true;
+            ensure!(fill_index.is_none(), "Duplicated fill instruction");
             fill_index = Some(index);
 
             ensure!(data.len() >= 8, "Not enough data in fill instruction");
@@ -355,10 +353,10 @@ fn validate_fill_inner(
         }
     }
 
-    ensure!(fill_ix_found, "Missing fill instruction");
+    let fill_index = fill_index.context("Missing fill instruction")?;
     if let Some(flash) = flash {
         flash_tracker.finish(
-            fill_index.context("Missing fill instruction")?,
+            fill_index,
             sanitized_message.instructions().len(),
             flash,
             &order,

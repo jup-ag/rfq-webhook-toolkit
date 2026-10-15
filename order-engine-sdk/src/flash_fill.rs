@@ -80,8 +80,6 @@ impl TryFrom<&webhook_api::responses::FlashFill> for Attestation {
             "signature must be 65 bytes, got {}",
             sig.len()
         );
-        let mut signature = [0u8; 64];
-        signature.copy_from_slice(&sig[..64]);
         // Ethereum-style v (27/28) or a raw recovery id (0/1); the precompile wants 0/1.
         let recovery_id = match sig[64] {
             v @ (0 | 1) => v,
@@ -94,7 +92,7 @@ impl TryFrom<&webhook_api::responses::FlashFill> for Attestation {
             price: f.price.parse().context("price")?,
             amount: f.amount.parse().context("amount")?,
             expiration: f.expiration,
-            signature,
+            signature: sig[..64].try_into()?,
             recovery_id,
         })
     }
@@ -210,35 +208,31 @@ pub fn token_2022_ata(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
 
 // ---- Instructions -----------------------------------------------------------------------------
 
-/// The 14 accounts shared by `flashloan_borrow` and `flashloan_payback`.
-pub fn flashloan_accounts(signer: &Pubkey, mint: &Pubkey) -> Vec<AccountMeta> {
-    vec![
-        AccountMeta::new(*signer, true),
-        AccountMeta::new(flashloan_admin(), false),
-        AccountMeta::new(
-            get_associated_token_address_with_program_id(signer, mint, &TOKEN_PROGRAM),
-            false,
-        ),
-        AccountMeta::new_readonly(*mint, false),
-        AccountMeta::new(token_reserve(mint), false),
-        AccountMeta::new(flashloan_borrow_position(mint), false),
-        AccountMeta::new_readonly(rate_model(mint), false),
-        AccountMeta::new(liquidity_vault(mint), false),
-        AccountMeta::new_readonly(liquidity(), false),
-        AccountMeta::new_readonly(LIQUIDITY_PROGRAM, false),
-        AccountMeta::new_readonly(TOKEN_PROGRAM, false),
-        AccountMeta::new_readonly(ASSOCIATED_TOKEN_PROGRAM, false),
-        AccountMeta::new_readonly(SYSTEM_PROGRAM, false),
-        AccountMeta::new_readonly(SYSVAR_INSTRUCTIONS, false),
-    ]
-}
-
+/// `flashloan_borrow` and `flashloan_payback` share the same 14 accounts.
 fn flashloan_ix(disc: [u8; 8], signer: &Pubkey, mint: &Pubkey, amount: u64) -> Instruction {
     let mut data = disc.to_vec();
     data.extend_from_slice(&amount.to_le_bytes());
     Instruction {
         program_id: FLASHLOAN_PROGRAM,
-        accounts: flashloan_accounts(signer, mint),
+        accounts: vec![
+            AccountMeta::new(*signer, true),
+            AccountMeta::new(flashloan_admin(), false),
+            AccountMeta::new(
+                get_associated_token_address_with_program_id(signer, mint, &TOKEN_PROGRAM),
+                false,
+            ),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new(token_reserve(mint), false),
+            AccountMeta::new(flashloan_borrow_position(mint), false),
+            AccountMeta::new_readonly(rate_model(mint), false),
+            AccountMeta::new(liquidity_vault(mint), false),
+            AccountMeta::new_readonly(liquidity(), false),
+            AccountMeta::new_readonly(LIQUIDITY_PROGRAM, false),
+            AccountMeta::new_readonly(TOKEN_PROGRAM, false),
+            AccountMeta::new_readonly(ASSOCIATED_TOKEN_PROGRAM, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM, false),
+            AccountMeta::new_readonly(SYSVAR_INSTRUCTIONS, false),
+        ],
         data,
     }
 }
@@ -251,46 +245,9 @@ pub fn flashloan_payback_ix(signer: &Pubkey, mint: &Pubkey, amount: u64) -> Inst
     flashloan_ix(FLASHLOAN_PAYBACK_DISC, signer, mint, amount)
 }
 
-/// The 25 accounts shared by `mint_with_usdc` and `redeem_for_usdc`.
-pub fn ondo_usdc_swap_accounts(
-    user: &Pubkey,
-    gm_mint: &Pubkey,
-    attestation_id: &[u8; 16],
-) -> Vec<AccountMeta> {
-    let manager = usdon_manager_state();
-    vec![
-        AccountMeta::new(*user, true),
-        AccountMeta::new(*gm_mint, false),
-        AccountMeta::new_readonly(gm_mint_authority(), false),
-        AccountMeta::new(ondo_user(user, gm_mint), false),
-        AccountMeta::new(token_limit(gm_mint), false),
-        AccountMeta::new(sanity_check(gm_mint), false),
-        AccountMeta::new(token_2022_ata(user, gm_mint), false),
-        AccountMeta::new(attestation_account(attestation_id), false),
-        AccountMeta::new_readonly(whitelist(user), false),
-        AccountMeta::new_readonly(TOKEN_2022_PROGRAM, false),
-        AccountMeta::new_readonly(SYSTEM_PROGRAM, false),
-        AccountMeta::new_readonly(ASSOCIATED_TOKEN_PROGRAM, false),
-        AccountMeta::new_readonly(TOKEN_PROGRAM, false),
-        AccountMeta::new_readonly(PYTH_USDC_PRICE_UPDATE, false),
-        AccountMeta::new(
-            get_associated_token_address_with_program_id(&manager, &USDC_MINT, &TOKEN_PROGRAM),
-            false,
-        ),
-        AccountMeta::new(token_2022_ata(&manager, &USDON_MINT), false),
-        AccountMeta::new_readonly(USDC_MINT, false),
-        AccountMeta::new(usdc_ata(user), false),
-        AccountMeta::new(USDON_MINT, false),
-        AccountMeta::new(token_2022_ata(user, &USDON_MINT), false),
-        AccountMeta::new_readonly(manager, false),
-        AccountMeta::new(gmtoken_manager_state(), false),
-        AccountMeta::new_readonly(SYSVAR_INSTRUCTIONS, false),
-        AccountMeta::new_readonly(gm_event_authority(), false),
-        AccountMeta::new_readonly(ONDO_GM_PROGRAM, false),
-    ]
-}
-
-fn ondo_ix_data(att: &Attestation) -> Vec<u8> {
+/// `mint_with_usdc` or `redeem_for_usdc`, depending on the attestation side. Both take the same
+/// 25 accounts.
+pub fn ondo_usdc_swap_ix(user: &Pubkey, gm_mint: &Pubkey, att: &Attestation) -> Instruction {
     let disc = match att.side {
         FlashSide::Mint => MINT_WITH_USDC_DISC,
         FlashSide::Redeem => REDEEM_FOR_USDC_DISC,
@@ -300,15 +257,37 @@ fn ondo_ix_data(att: &Attestation) -> Vec<u8> {
     data.extend_from_slice(&att.price.to_le_bytes());
     data.extend_from_slice(&att.amount.to_le_bytes());
     data.extend_from_slice(&att.expiration.to_le_bytes());
-    data
-}
-
-/// `mint_with_usdc` or `redeem_for_usdc`, depending on the attestation side.
-pub fn ondo_usdc_swap_ix(user: &Pubkey, gm_mint: &Pubkey, att: &Attestation) -> Instruction {
+    let manager = usdon_manager_state();
     Instruction {
         program_id: ONDO_GM_PROGRAM,
-        accounts: ondo_usdc_swap_accounts(user, gm_mint, &att.id),
-        data: ondo_ix_data(att),
+        accounts: vec![
+            AccountMeta::new(*user, true),
+            AccountMeta::new(*gm_mint, false),
+            AccountMeta::new_readonly(gm_mint_authority(), false),
+            AccountMeta::new(ondo_user(user, gm_mint), false),
+            AccountMeta::new(token_limit(gm_mint), false),
+            AccountMeta::new(sanity_check(gm_mint), false),
+            AccountMeta::new(token_2022_ata(user, gm_mint), false),
+            AccountMeta::new(attestation_account(&att.id), false),
+            AccountMeta::new_readonly(whitelist(user), false),
+            AccountMeta::new_readonly(TOKEN_2022_PROGRAM, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM, false),
+            AccountMeta::new_readonly(ASSOCIATED_TOKEN_PROGRAM, false),
+            AccountMeta::new_readonly(TOKEN_PROGRAM, false),
+            AccountMeta::new_readonly(PYTH_USDC_PRICE_UPDATE, false),
+            AccountMeta::new(usdc_ata(&manager), false),
+            AccountMeta::new(token_2022_ata(&manager, &USDON_MINT), false),
+            AccountMeta::new_readonly(USDC_MINT, false),
+            AccountMeta::new(usdc_ata(user), false),
+            AccountMeta::new(USDON_MINT, false),
+            AccountMeta::new(token_2022_ata(user, &USDON_MINT), false),
+            AccountMeta::new_readonly(manager, false),
+            AccountMeta::new(gmtoken_manager_state(), false),
+            AccountMeta::new_readonly(SYSVAR_INSTRUCTIONS, false),
+            AccountMeta::new_readonly(gm_event_authority(), false),
+            AccountMeta::new_readonly(ONDO_GM_PROGRAM, false),
+        ],
+        data,
     }
 }
 
@@ -411,30 +390,20 @@ pub fn wrap(
     let att = &exp.attestation;
     let leg = usdc_leg(att.side, args.input_amount, args.output_amount);
     let digest = attestation_digest(&exp.chain_id, att, maker, gm_mint);
-    let mut out = Vec::with_capacity(core.len() + 4);
     let mut core = core.into_iter();
-    out.push(core.next().unwrap());
-    out.push(core.next().unwrap());
+    let mut out: Vec<_> = core.by_ref().take(2).collect();
     out.push(flashloan_borrow_ix(maker, &USDC_MINT, leg));
-    let ondo = |out: &mut Vec<Instruction>| {
-        out.push(secp256k1_ix(
-            &exp.attestation_signer,
-            att,
-            &digest,
-            out.len() as u8,
-        ));
-        out.push(ondo_usdc_swap_ix(maker, gm_mint, att));
-    };
-    match att.side {
-        FlashSide::Mint => {
-            ondo(&mut out);
-            out.extend(core);
-        }
-        FlashSide::Redeem => {
-            out.extend(core);
-            ondo(&mut out);
-        }
+    if att.side == FlashSide::Redeem {
+        out.extend(core.by_ref());
     }
+    out.push(secp256k1_ix(
+        &exp.attestation_signer,
+        att,
+        &digest,
+        out.len() as u8,
+    ));
+    out.push(ondo_usdc_swap_ix(maker, gm_mint, att));
+    out.extend(core);
     out.push(flashloan_payback_ix(maker, &USDC_MINT, leg));
     Ok(out)
 }
@@ -445,14 +414,11 @@ pub fn message_uses_flash_loan(message: &solana_sdk::message::VersionedMessage) 
 }
 
 /// Accounts worth putting in an address lookup table: everything static across fills for these
-/// GM mints and makers. Invoked program ids are listed too; the compiler keeps them static anyway.
+/// GM mints and makers.
 pub fn lookup_accounts(gm_mints: &[Pubkey], makers: &[Pubkey]) -> Vec<Pubkey> {
     let manager = usdon_manager_state();
     let mut keys = vec![
-        FLASHLOAN_PROGRAM,
         LIQUIDITY_PROGRAM,
-        ONDO_GM_PROGRAM,
-        SECP256K1_PROGRAM,
         SYSVAR_INSTRUCTIONS,
         SYSTEM_PROGRAM,
         TOKEN_PROGRAM,
@@ -471,7 +437,7 @@ pub fn lookup_accounts(gm_mints: &[Pubkey], makers: &[Pubkey]) -> Vec<Pubkey> {
         manager,
         gmtoken_manager_state(),
         gm_event_authority(),
-        get_associated_token_address_with_program_id(&manager, &USDC_MINT, &TOKEN_PROGRAM),
+        usdc_ata(&manager),
         token_2022_ata(&manager, &USDON_MINT),
     ];
     for mint in gm_mints {
@@ -510,6 +476,11 @@ fn same_accounts(actual: &[BorrowedAccountMeta], expected: &[AccountMeta]) -> bo
         })
 }
 
+fn record(slot: &mut Option<usize>, index: usize, what: &str) -> Result<()> {
+    ensure!(slot.replace(index).is_none(), "duplicate {what}");
+    Ok(())
+}
+
 impl FlashTracker {
     /// The GM mint is whichever side of the order is not USDC.
     pub fn gm_mint(order: &crate::fill::Order, side: FlashSide) -> Result<Pubkey> {
@@ -537,20 +508,15 @@ impl FlashTracker {
         let gm_mint = Self::gm_mint(order, att.side)?;
         let leg = usdc_leg(att.side, order.in_amount, order.out_amount);
         if program_id == FLASHLOAN_PROGRAM {
+            let borrow = flashloan_borrow_ix(&order.maker, &USDC_MINT, leg);
             ensure!(
-                same_accounts(&ix.accounts, &flashloan_accounts(&order.maker, &USDC_MINT)),
+                same_accounts(&ix.accounts, &borrow.accounts),
                 "flashloan accounts differ from the maker's USDC flash loan"
             );
-            if ix.data == flashloan_borrow_ix(&order.maker, &USDC_MINT, leg).data {
-                ensure!(
-                    self.borrow.replace(index).is_none(),
-                    "duplicate flashloan borrow"
-                );
+            if ix.data == borrow.data {
+                record(&mut self.borrow, index, "flashloan borrow")?;
             } else if ix.data == flashloan_payback_ix(&order.maker, &USDC_MINT, leg).data {
-                ensure!(
-                    self.payback.replace(index).is_none(),
-                    "duplicate flashloan payback"
-                );
+                record(&mut self.payback, index, "flashloan payback")?;
             } else {
                 bail!("unexpected flashloan instruction or amount");
             }
@@ -561,26 +527,18 @@ impl FlashTracker {
                 ix.accounts.is_empty() && ix.data == expected.data,
                 "secp256k1 instruction does not match the attestation"
             );
-            ensure!(
-                self.secp.replace(index).is_none(),
-                "duplicate secp256k1 instruction"
-            );
+            record(&mut self.secp, index, "secp256k1 instruction")?;
         } else if program_id == ONDO_GM_PROGRAM {
+            let expected = ondo_usdc_swap_ix(&order.maker, &gm_mint, att);
             ensure!(
-                same_accounts(
-                    &ix.accounts,
-                    &ondo_usdc_swap_accounts(&order.maker, &gm_mint, &att.id)
-                ),
+                same_accounts(&ix.accounts, &expected.accounts),
                 "Ondo accounts differ from the maker's mint/redeem"
             );
             ensure!(
-                ix.data == ondo_ix_data(att),
+                ix.data == expected.data,
                 "Ondo instruction data differs from the attestation"
             );
-            ensure!(
-                self.ondo.replace(index).is_none(),
-                "duplicate Ondo instruction"
-            );
+            record(&mut self.ondo, index, "Ondo instruction")?;
         } else {
             bail!("Unexpected program id {program_id}");
         }
@@ -595,18 +553,10 @@ impl FlashTracker {
         order: &crate::fill::Order,
     ) -> Result<()> {
         let att = &exp.attestation;
-        let borrow = self
-            .borrow
-            .ok_or_else(|| anyhow!("missing flashloan borrow"))?;
-        let payback = self
-            .payback
-            .ok_or_else(|| anyhow!("missing flashloan payback"))?;
-        let secp = self
-            .secp
-            .ok_or_else(|| anyhow!("missing secp256k1 instruction"))?;
-        let ondo = self
-            .ondo
-            .ok_or_else(|| anyhow!("missing Ondo instruction"))?;
+        let borrow = self.borrow.context("missing flashloan borrow")?;
+        let payback = self.payback.context("missing flashloan payback")?;
+        let secp = self.secp.context("missing secp256k1 instruction")?;
+        let ondo = self.ondo.context("missing Ondo instruction")?;
         ensure!(
             borrow < fill_index && fill_index < payback,
             "borrow must precede the fill and payback follow it"
@@ -646,17 +596,9 @@ impl FlashTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
 
-    fn pk(s: &str) -> Pubkey {
-        Pubkey::from_str(s).unwrap()
-    }
     fn hex16(s: &str) -> [u8; 16] {
-        let v: Vec<u8> = (0..32)
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
-            .collect();
-        v.try_into().unwrap()
+        hex_vec(s).try_into().unwrap()
     }
     fn hex_vec(s: &str) -> Vec<u8> {
         (0..s.len())
@@ -667,8 +609,8 @@ mod tests {
 
     /// Mainnet tx 2uYghATvDcm92p7swkV1YkFd6YGGzzZQsHhoUnwcAWrdM13RshUvrKieBRf8Dg4mcHgTwLWH9EeZXRRLerRo2fT7
     fn real_mint() -> (Pubkey, Pubkey, Attestation) {
-        let user = pk("DSqMPMsMAbEJVNuPKv1ZFdzt6YvJaDPDddfeW7ajtqds");
-        let mint = pk("14kLsQVmc64qZexYuR4XGop9y8BeMkd77pJUm1Rhondo");
+        let user = pubkey!("DSqMPMsMAbEJVNuPKv1ZFdzt6YvJaDPDddfeW7ajtqds");
+        let mint = pubkey!("14kLsQVmc64qZexYuR4XGop9y8BeMkd77pJUm1Rhondo");
         let sig = hex_vec("6e21ca1dcffeedfa3826f982ed471d75a438f8fe486d18c2581355f11fc927153b977d186cd52811499965ba6824e6edf7d052e842a491e19537cca2b1771228");
         let att = Attestation {
             id: hex16("f12d2fc0f52d49e789a14ce6b592f5db"),
@@ -685,7 +627,7 @@ mod tests {
     #[test]
     fn flashloan_accounts_match_mainnet_borrow() {
         // Mainnet tx 2pHeKYb4QAKyFz6MsXFCaZe5FwfKdznSdFBjYSv1vD36h66Jp4nPQ74JDvoCikwVTwoobjo9ZXfYNvoVTW3tziMa
-        let signer = pk("Dz744q23G6vcMtuZnRMUDyP63gu4GGWpuawKRLmua8Ar");
+        let signer = pubkey!("Dz744q23G6vcMtuZnRMUDyP63gu4GGWpuawKRLmua8Ar");
         let expected = [
             "Dz744q23G6vcMtuZnRMUDyP63gu4GGWpuawKRLmua8Ar",
             "ALXWtv2P4GqH1B7Lq731joag52yRBRqmHV4naiXPTYWL",
@@ -702,12 +644,9 @@ mod tests {
             "11111111111111111111111111111111",
             "Sysvar1nstructions1111111111111111111111111",
         ];
-        let actual: Vec<String> = flashloan_accounts(&signer, &USDC_MINT)
-            .iter()
-            .map(|a| a.pubkey.to_string())
-            .collect();
-        assert_eq!(actual, expected);
         let ix = flashloan_borrow_ix(&signer, &USDC_MINT, 1);
+        let actual: Vec<String> = ix.accounts.iter().map(|a| a.pubkey.to_string()).collect();
+        assert_eq!(actual, expected);
         assert_eq!(ix.data.len(), 16);
         assert_eq!(&ix.data[..8], &FLASHLOAN_BORROW_DISC);
     }
@@ -742,12 +681,9 @@ mod tests {
             "6ipdj6w8PRZqwESgGyDnmJr2vcwu51bKNFk7yd2K96Bz",
             "XzTT4XB8m7sLD2xi6snefSasaswsKCxx5Tifjondogm",
         ];
-        let actual: Vec<String> = ondo_usdc_swap_accounts(&user, &mint, &att.id)
-            .iter()
-            .map(|a| a.pubkey.to_string())
-            .collect();
-        assert_eq!(actual, expected);
         let ix = ondo_usdc_swap_ix(&user, &mint, &att);
+        let actual: Vec<String> = ix.accounts.iter().map(|a| a.pubkey.to_string()).collect();
+        assert_eq!(actual, expected);
         assert_eq!(
             ix.data,
             hex_vec("801c85ad478eb9cef12d2fc0f52d49e789a14ce6b592f5db482a5a9903000000dc714213000000004954b26a00000000")
@@ -783,7 +719,6 @@ mod tests {
             "81f148978e028828c4cb1da870fba0cbfe2304b1f3d1c461a0d0da7ef08607f8"
         );
         assert_eq!(ix.data, hex_vec(&expected));
-        assert_eq!(ix.data.len(), 129);
 
         // Redeem side: mainnet tx 2bsFdPLLYtu5FEr2vrZksQs1UcTsyiwAHVsUNWt9jkGdbFPT8eoe2Wprwyijq5HxpNewSh77NuspJAQNQP1BLqCr
         let redeem = Attestation {
@@ -799,7 +734,7 @@ mod tests {
             &MAINNET_CHAIN_ID,
             &redeem,
             &user,
-            &pk("EJmUVvDqAdfH5zEohkdS4234bi3c6iunqEMobjmondo"),
+            &pubkey!("EJmUVvDqAdfH5zEohkdS4234bi3c6iunqEMobjmondo"),
         );
         assert_eq!(
             hex_vec("89bf29493e32e6fb82a3b63ad9ea0c78ef9067a8b9620c0d8e519eec142c9724"),
@@ -821,40 +756,20 @@ mod tests {
             signature: BASE64_STANDARD.encode(&sig65),
         };
         assert_eq!(Attestation::try_from(&wire).unwrap(), att);
-        // Ondo's documented example id is a version-4 UUID only when read big-endian.
-        let example = webhook_api::responses::FlashFill {
-            attestation_id: "229852750420835981756873903928305653446".into(),
-            ..wire
-        };
-        let id = Attestation::try_from(&example).unwrap().id;
-        assert_eq!(
-            (id[6] >> 4, id[8] >> 6),
-            (4, 0b10),
-            "UUID version 4, RFC 4122 variant"
-        );
-        assert_eq!(lookup_accounts(&[USDC_MINT], &[]).len(), 27);
+        assert_eq!(lookup_accounts(&[USDC_MINT], &[]).len(), 24);
     }
 
     #[test]
     fn reads_the_live_flashloan_fee() {
         // flashloan_admin on mainnet, 2026-10-15: status 1 (active), fee 0.
-        let admin = hex_vec("a2a12d1c835bca58fa20b7645eeeecdca805b93db8c46089cb858ff0d84fe5d0a478a3c4e18fe4950afe1e97e456cbb92e642a25b50ba6396ff248164bca746963a84592acd6ccc301000000b5d06a00000000000000000000000000ff");
+        let mut admin = hex_vec("a2a12d1c835bca58fa20b7645eeeecdca805b93db8c46089cb858ff0d84fe5d0a478a3c4e18fe4950afe1e97e456cbb92e642a25b50ba6396ff248164bca746963a84592acd6ccc301000000b5d06a00000000000000000000000000ff");
         assert_eq!(flashloan_fee_bps(&admin).unwrap(), 0);
-        let mut charged = admin.clone();
-        charged[73] = 5;
-        assert_eq!(flashloan_fee_bps(&charged).unwrap(), 5);
         assert!(flashloan_fee_bps(&admin[..74]).is_err());
+        admin[73] = 5;
+        assert_eq!(flashloan_fee_bps(&admin).unwrap(), 5);
     }
 
-    fn fill_ix(
-        maker: Pubkey,
-        taker: Pubkey,
-        input_mint: Pubkey,
-        output_mint: Pubkey,
-        in_amount: u64,
-        out_amount: u64,
-        expire_at: i64,
-    ) -> Instruction {
+    fn fill_ix(o: &crate::fill::Order) -> Instruction {
         use anchor_lang::{InstructionData, ToAccountMetas};
         let program_for = |mint: &Pubkey| {
             if *mint == USDC_MINT {
@@ -867,25 +782,25 @@ mod tests {
             get_associated_token_address_with_program_id(owner, mint, &program_for(mint))
         };
         let mut data = crate::order_engine::client::args::Fill {
-            input_amount: in_amount,
-            output_amount: out_amount,
-            expire_at,
+            input_amount: o.in_amount,
+            output_amount: o.out_amount,
+            expire_at: o.expire_at,
         }
         .data();
         data.extend_from_slice(&[2, 0, 0]);
         Instruction {
             program_id: crate::order_engine::ID,
             accounts: crate::order_engine::client::accounts::Fill {
-                taker,
-                maker,
-                taker_input_mint_token_account: Some(ata(&taker, &input_mint)),
-                maker_input_mint_token_account: Some(ata(&maker, &input_mint)),
-                taker_output_mint_token_account: Some(ata(&taker, &output_mint)),
-                maker_output_mint_token_account: Some(ata(&maker, &output_mint)),
-                input_mint,
-                input_token_program: program_for(&input_mint),
-                output_mint,
-                output_token_program: program_for(&output_mint),
+                taker: o.taker,
+                maker: o.maker,
+                taker_input_mint_token_account: Some(ata(&o.taker, &o.input_mint)),
+                maker_input_mint_token_account: Some(ata(&o.maker, &o.input_mint)),
+                taker_output_mint_token_account: Some(ata(&o.taker, &o.output_mint)),
+                maker_output_mint_token_account: Some(ata(&o.maker, &o.output_mint)),
+                input_mint: o.input_mint,
+                input_token_program: program_for(&o.input_mint),
+                output_mint: o.output_mint,
+                output_token_program: program_for(&o.output_mint),
                 system_program: SYSTEM_PROGRAM,
             }
             .to_account_metas(None),
@@ -923,28 +838,21 @@ mod tests {
             output_decimals: 9,
             integrator_fee: None,
         };
-        let cu = || {
-            vec![
+        let wrapped = |o: &Order, exp: &FlashFillExpectation| {
+            let core = vec![
                 ComputeBudgetInstruction::set_compute_unit_price(1_000),
                 ComputeBudgetInstruction::set_compute_unit_limit(600_000),
-            ]
+                fill_ix(o),
+            ];
+            wrap(core, &maker, &gm_mint, exp).unwrap()
         };
         let programs = |ixs: &[Instruction]| ixs.iter().map(|ix| ix.program_id).collect::<Vec<_>>();
 
         // Mint side: taker pays 5 USDC and receives the minted amount minus Jupiter's fee.
         let expire_at = att.expiration - 5;
-        let mut core = cu();
-        core.push(fill_ix(
-            maker,
-            taker,
-            USDC_MINT,
-            gm_mint,
-            5_000_000,
-            att.amount - 1,
-            expire_at,
-        ));
+        let ok = || order(5_000_000, USDC_MINT, att.amount - 1, gm_mint, expire_at);
         let exp = FlashFillExpectation::mainnet(att.clone());
-        let ixs = wrap(core, &maker, &gm_mint, &exp).unwrap();
+        let ixs = wrapped(&ok(), &exp);
         // The borrow and the payback are the 5 USDC the taker pays.
         assert_eq!(ixs[2], flashloan_borrow_ix(&maker, &USDC_MINT, 5_000_000));
         assert_eq!(ixs[6], flashloan_payback_ix(&maker, &USDC_MINT, 5_000_000));
@@ -961,79 +869,34 @@ mod tests {
             ]
         );
         let msg = sanitize(&maker, &ixs);
-        let ok = order(5_000_000, USDC_MINT, att.amount - 1, gm_mint, expire_at);
-        let validated = validate_flash_fill_sanitized_message(&msg, ok, &exp).unwrap();
+        let validated = validate_flash_fill_sanitized_message(&msg, ok(), &exp).unwrap();
         assert_eq!(validated.compute_unit_limit, 600_000);
         // The plain validator still refuses the wrapper.
-        assert!(validate_fill_sanitized_message(
-            &msg,
-            order(5_000_000, USDC_MINT, att.amount - 1, gm_mint, expire_at)
-        )
-        .is_err());
+        assert!(validate_fill_sanitized_message(&msg, ok()).is_err());
         // A borrow other than the USDC leg, amounts other than the fill's, a fill outliving the
         // attestation, a missing payback.
         let mut over_borrow = ixs.clone();
         over_borrow[2] = flashloan_borrow_ix(&maker, &USDC_MINT, 5_000_001);
-        assert!(validate_flash_fill_sanitized_message(
-            &sanitize(&maker, &over_borrow),
-            order(5_000_000, USDC_MINT, att.amount - 1, gm_mint, expire_at),
-            &exp
-        )
-        .is_err());
-        assert!(validate_flash_fill_sanitized_message(
-            &msg,
-            order(4_000_000, USDC_MINT, att.amount - 1, gm_mint, expire_at),
-            &exp
-        )
-        .is_err());
-        let late = sanitize(&maker, &{
-            let mut c = cu();
-            c.push(fill_ix(
-                maker,
-                taker,
-                USDC_MINT,
-                gm_mint,
-                5_000_000,
-                att.amount - 1,
-                att.expiration + 1,
-            ));
-            wrap(c, &maker, &gm_mint, &exp).unwrap()
-        });
-        assert!(validate_flash_fill_sanitized_message(
-            &late,
-            order(
-                5_000_000,
-                USDC_MINT,
-                att.amount - 1,
-                gm_mint,
-                att.expiration + 1
-            ),
-            &exp
-        )
-        .is_err());
+        assert!(
+            validate_flash_fill_sanitized_message(&sanitize(&maker, &over_borrow), ok(), &exp)
+                .is_err()
+        );
+        let mut under_paid = ok();
+        under_paid.in_amount = 4_000_000;
+        assert!(validate_flash_fill_sanitized_message(&msg, under_paid, &exp).is_err());
+        let mut late = ok();
+        late.expire_at = att.expiration + 1;
+        let late_msg = sanitize(&maker, &wrapped(&late, &exp));
+        assert!(validate_flash_fill_sanitized_message(&late_msg, late, &exp).is_err());
         let no_payback = sanitize(&maker, &ixs[..6]);
-        assert!(validate_flash_fill_sanitized_message(
-            &no_payback,
-            order(5_000_000, USDC_MINT, att.amount - 1, gm_mint, expire_at),
-            &exp
-        )
-        .is_err());
+        assert!(validate_flash_fill_sanitized_message(&no_payback, ok(), &exp).is_err());
 
         // Redeem side: taker sells the GM amount, receives 4.9 USDC borrowed up front.
         let mut redeem = att.clone();
         redeem.side = FlashSide::Redeem;
-        let mut core = cu();
-        core.push(fill_ix(
-            maker,
-            taker,
-            gm_mint,
-            USDC_MINT,
-            redeem.amount,
-            4_900_000,
-            expire_at,
-        ));
+        let redeem_order = || order(redeem.amount, gm_mint, 4_900_000, USDC_MINT, expire_at);
         let exp = FlashFillExpectation::mainnet(redeem.clone());
-        let ixs = wrap(core, &maker, &gm_mint, &exp).unwrap();
+        let ixs = wrapped(&redeem_order(), &exp);
         // The borrow and the payback are the 4.9 USDC the taker receives.
         assert_eq!(ixs[2], flashloan_borrow_ix(&maker, &USDC_MINT, 4_900_000));
         assert_eq!(
@@ -1049,20 +912,10 @@ mod tests {
             ]
         );
         let msg = sanitize(&maker, &ixs);
-        validate_flash_fill_sanitized_message(
-            &msg,
-            order(redeem.amount, gm_mint, 4_900_000, USDC_MINT, expire_at),
-            &exp,
-        )
-        .unwrap();
+        validate_flash_fill_sanitized_message(&msg, redeem_order(), &exp).unwrap();
         // Redeeming more than the taker delivers is refused.
         let mut greedy = exp.clone();
         greedy.attestation.amount += 1;
-        assert!(validate_flash_fill_sanitized_message(
-            &msg,
-            order(redeem.amount, gm_mint, 4_900_000, USDC_MINT, expire_at),
-            &greedy
-        )
-        .is_err());
+        assert!(validate_flash_fill_sanitized_message(&msg, redeem_order(), &greedy).is_err());
     }
 }
