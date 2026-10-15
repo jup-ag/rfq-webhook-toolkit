@@ -1,4 +1,3 @@
-use agave_reserved_account_keys::ReservedAccountKeys;
 use anyhow::{anyhow, Result};
 use base64::prelude::*;
 use bincode;
@@ -66,7 +65,8 @@ pub fn versioned_message_to_sanitized_message_with_loaded_addresses(
     let sanitized_message = SanitizedMessage::try_new(
         sanitized_versioned_message,
         SimpleAddressLoader::Enabled(loaded_addresses),
-        &ReservedAccountKeys::empty_key_set(),
+        // No reserved keys: the same as ReservedAccountKeys::empty_key_set().
+        &Default::default(),
     )
     .map_err(|error| anyhow!("Invalid transaction: {error}"))?;
 

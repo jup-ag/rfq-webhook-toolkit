@@ -3401,7 +3401,6 @@ dependencies = [
 name = "order-engine-sdk"
 version = "0.1.0"
 dependencies = [
- "agave-reserved-account-keys",
  "anchor-lang",
  "anchor-spl",
  "anyhow",
