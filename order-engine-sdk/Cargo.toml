@@ -10,3 +10,4 @@ solana-sdk = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 anyhow = { workspace = true }
+webhook-api = { path = "../webhook-api" }

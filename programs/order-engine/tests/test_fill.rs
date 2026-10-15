@@ -341,7 +341,7 @@ async fn prepare_test(test_mode: TestMode) -> TestEnvironment {
     let TestMode {
         taker_accounts,
         maker_accounts,
-        expected_error,
+        expected_error: _,
         input_mint_extensions,
         output_mint_extensions,
     } = test_mode;

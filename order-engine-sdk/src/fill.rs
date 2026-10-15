@@ -1,3 +1,4 @@
+use crate::flash_fill::{FlashFillExpectation, FlashTracker};
 use crate::order_engine;
 use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
 use anchor_spl::associated_token;
@@ -40,6 +41,26 @@ pub fn validate_fill_sanitized_message(
     sanitized_message: &SanitizedMessage,
     order: Order,
 ) -> Result<ValidatedFill> {
+    validate_fill_inner(sanitized_message, order, None)
+}
+
+/// Like [`validate_fill_sanitized_message`], additionally allowing exactly the flash-loan and
+/// Ondo instructions described by `flash` (see [`crate::flash_fill`]) around the fill.
+pub fn validate_flash_fill_sanitized_message(
+    sanitized_message: &SanitizedMessage,
+    order: Order,
+    flash: &FlashFillExpectation,
+) -> Result<ValidatedFill> {
+    validate_fill_inner(sanitized_message, order, Some(flash))
+}
+
+fn validate_fill_inner(
+    sanitized_message: &SanitizedMessage,
+    order: Order,
+    flash: Option<&FlashFillExpectation>,
+) -> Result<ValidatedFill> {
+    let mut flash_tracker = FlashTracker::default();
+    let mut fill_index = None;
     let fee_payer = sanitized_message.fee_payer();
     ensure!(
         fee_payer == &order.maker,
@@ -68,12 +89,16 @@ pub fn validate_fill_sanitized_message(
     let mut compute_unit_limit = None;
     let mut compute_unit_price = None;
 
-    for BorrowedInstruction {
-        program_id,
-        accounts,
-        data,
-    } in sanitized_message.decompile_instructions()
+    for (index, instruction) in sanitized_message
+        .decompile_instructions()
+        .into_iter()
+        .enumerate()
     {
+        let BorrowedInstruction {
+            program_id,
+            ref accounts,
+            data,
+        } = instruction;
         if program_id == &compute_budget::ID {
             // Compute budget should have been driven from the fee payer, certainly need to validate
             let compute_budget_ix = try_from_slice_unchecked::<ComputeBudgetInstruction>(data)?;
@@ -102,6 +127,7 @@ pub fn validate_fill_sanitized_message(
         } else if program_id == &order_engine::ID {
             ensure!(!fill_ix_found, "Duplicated fill instruction");
             fill_ix_found = true;
+            fill_index = Some(index);
 
             ensure!(data.len() >= 8, "Not enough data in fill instruction");
             // Must slice off anchor's discriminator first
@@ -111,7 +137,7 @@ pub fn validate_fill_sanitized_message(
                 "Not a fill discriminator"
             );
 
-            let pubkeys = accounts.into_iter().map(|a| *a.pubkey).collect::<Vec<_>>();
+            let pubkeys = accounts.iter().map(|a| *a.pubkey).collect::<Vec<_>>();
             let [taker, maker, _taker_input_mint_token_account, _maker_input_mint_token_account, _taker_output_mint_token_account, _maker_output_mint_token_account, input_mint, _input_token_program, output_mint, _output_mint_token_program, ..] =
                 pubkeys.as_slice()
             else {
@@ -135,12 +161,22 @@ pub fn validate_fill_sanitized_message(
 
             // Check the expiry
             ensure!(fill_ix.expire_at == order.expire_at, "Incorrect expiry");
+        } else if let Some(flash) = flash {
+            flash_tracker.observe(index, &instruction, flash, &order)?;
         } else {
             bail!("Unexpected program id {program_id}");
         }
     }
 
     ensure!(fill_ix_found, "Missing fill instruction");
+    if let Some(flash) = flash {
+        flash_tracker.finish(
+            fill_index.context("Missing fill instruction")?,
+            sanitized_message.instructions().len(),
+            flash,
+            &order,
+        )?;
+    }
     Ok(ValidatedFill {
         compute_unit_limit: compute_unit_limit.context("Missing compute unit limit")?,
         compute_unit_price: compute_unit_price.context("Missing compute unit price")?,
@@ -365,14 +401,14 @@ mod tests {
         let input_amount = 100;
         let expire_at = 1000;
         let input_mint = Pubkey::new_unique();
-        let taker_input_mint_token_account = Some(Pubkey::new_unique());
+        let taker_input_mint_token_account = Pubkey::new_unique();
 
         let fill_ix = Instruction {
             program_id: order_engine::ID,
             accounts: order_engine::client::accounts::Fill {
                 taker,
                 maker,
-                taker_input_mint_token_account,
+                taker_input_mint_token_account: Some(taker_input_mint_token_account),
                 maker_input_mint_token_account: Some(Pubkey::new_unique()),
                 taker_output_mint_token_account: Some(Pubkey::new_unique()),
                 maker_output_mint_token_account: Some(Pubkey::new_unique()),
@@ -399,8 +435,7 @@ mod tests {
             input_amount,
             input_mint,
             output_mint: fill_ix.accounts[8].pubkey,
-            taker_input_mint_token_account: taker_input_mint_token_account
-                .unwrap_or(order_engine::ID),
+            taker_input_mint_token_account,
             expire_at,
         };
 

@@ -3398,6 +3398,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "solana-sdk",
+ "webhook-api",
 ]
 
 [[package]]
@@ -7488,14 +7489,8 @@ dependencies = [
 name = "webhook-api"
 version = "0.1.0"
 dependencies = [
- "anchor-lang",
- "anchor-spl",
- "anyhow",
- "base64 0.22.1",
- "bincode",
  "serde",
  "serde_json",
- "solana-sdk",
  "strum 0.26.3",
  "utoipa",
 ]

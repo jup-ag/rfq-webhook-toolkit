@@ -171,6 +171,9 @@ async fn example_quote(
                 amount_out: example_quoted_amount,
                 maker: maker_pubkey,
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
+                receiver: quote_request.receiver.clone(),
+                source: quote_request.source.clone(),
+                flash_fill: None,
             }
         }
         QuoteType::ExactOut => {
@@ -187,6 +190,9 @@ async fn example_quote(
                 amount_out: quote_request.amount.clone(),
                 maker: maker_pubkey,
                 prioritization_fee_to_use: quote_request.suggested_prioritization_fees,
+                receiver: quote_request.receiver.clone(),
+                source: quote_request.source.clone(),
+                flash_fill: None,
             }
         }
     };
@@ -230,6 +236,7 @@ async fn example_swap(
             quote_id: quote_request.quote_id.clone(),
             state: SwapState::Rejected,
             rejection_reason: Some("<rejection reason>".to_string()),
+            source: quote_request.source.clone(),
         })),
         SIMULATE_MALFORMED => Err(ApiError::BadRequest("Malformed request".to_string())),
         _ => {
@@ -290,6 +297,7 @@ async fn example_swap(
                 quote_id: quote_request.quote_id.clone(),
                 state: SwapState::Accepted,
                 rejection_reason: None,
+                source: quote_request.source.clone(),
             }))
         }
     }
@@ -367,7 +375,7 @@ pub async fn serve(config: Config) {
     // create the shared state
     let app_state = Arc::new(AppState {
         config: config.clone(),
-        keypair: keypair,
+        keypair,
     });
 
     // build the axum router
