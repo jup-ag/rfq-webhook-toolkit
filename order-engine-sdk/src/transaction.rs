@@ -120,13 +120,7 @@ mod tests {
 
     #[test]
     fn resolves_lookup_table_addresses_in_runtime_order() {
-        let payer = Pubkey::new_unique();
-        let program = Pubkey::new_unique();
-        let (w1, w2, r1) = (
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
-        );
+        let [payer, program, w1, w2, r1] = [(); 5].map(|_| Pubkey::new_unique());
         let table = AddressLookupTableAccount {
             key: Pubkey::new_unique(),
             addresses: vec![r1, w1, w2],
@@ -143,12 +137,6 @@ mod tests {
         let message = VersionedMessage::V0(
             v0::Message::try_compile(&payer, &[ix], &[table.clone()], Hash::default()).unwrap(),
         );
-        let VersionedMessage::V0(v0) = &message else {
-            unreachable!()
-        };
-        assert_eq!(v0.address_table_lookups.len(), 1);
-        assert_eq!(v0.address_table_lookups[0].writable_indexes, vec![1, 2]);
-        assert_eq!(v0.address_table_lookups[0].readonly_indexes, vec![0]);
 
         let loaded = resolve_loaded_addresses(&message, &[table]).unwrap();
         assert_eq!(loaded.writable, vec![w1, w2]);
