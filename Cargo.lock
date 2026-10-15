@@ -3408,6 +3408,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "solana-sdk",
+ "webhook-api",
 ]
 
 [[package]]

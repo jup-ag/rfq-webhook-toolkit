@@ -140,3 +140,17 @@ mod tests {
         );
     }
 }
+
+/// Which Ondo operation a flash-loan fill wraps around the order-engine fill.
+#[derive(
+    Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, EnumString, Display,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum FlashSide {
+    /// Taker buys the GM token: borrow USDC, mint, fill, repay.
+    #[strum(serialize = "mint")]
+    Mint,
+    /// Taker sells the GM token: borrow USDC, fill, redeem, repay.
+    #[strum(serialize = "redeem")]
+    Redeem,
+}

@@ -11,6 +11,7 @@ agave-reserved-account-keys = "~2"
 base64 = { workspace = true }
 bincode = { workspace = true }
 anyhow = { workspace = true }
+webhook-api = { path = "../webhook-api" }
 
 [lints]
 workspace = true
