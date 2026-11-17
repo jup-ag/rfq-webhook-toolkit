@@ -4,6 +4,8 @@
 //!
 //! Mint side (taker buys GM):  `[cu_price, cu_limit, borrow, secp, mint_with_usdc, ...fill..., payback]`
 //! Redeem side (taker sells GM): `[cu_price, cu_limit, borrow, ...fill..., secp, redeem_for_usdc, payback]`
+//! Portfolio Tokens ([`OndoProduct::Portfolio`]) put `mint_pt_with_attestation` /
+//! `redeem_pt_with_attestation` in the same slots.
 //!
 //! Account lists and the digest layout were pinned against mainnet transactions of both programs
 //! (see the tests). Program sources: `jup-ag/jupiter-lend` (IDLs) and
@@ -41,11 +43,19 @@ pub const ONDO_ATTESTATION_SIGNER: [u8; 20] = [
     0xff, 0x2d, 0x04, 0xf6, 0x00, 0x2c, 0x10, 0xeb, 0xa7, 0x02, 0xad, 0xaf, 0xe2, 0xf4, 0x3c, 0xac,
     0x59, 0x96, 0xc4, 0x77,
 ];
+/// Ethereum address of Ondo's Portfolio Token attestation signer on mainnet
+/// (`portfolio_token_manager.attestation_signer_secp`).
+pub const ONDO_PT_ATTESTATION_SIGNER: [u8; 20] = [
+    0xad, 0x22, 0x8f, 0x9d, 0x83, 0x83, 0x68, 0x46, 0x6a, 0x56, 0x74, 0x29, 0x0a, 0xec, 0xe8, 0x67,
+    0x3c, 0x6a, 0x16, 0xc6,
+];
 
 const FLASHLOAN_BORROW_DISC: [u8; 8] = [103, 19, 78, 24, 240, 9, 135, 63];
 const FLASHLOAN_PAYBACK_DISC: [u8; 8] = [213, 47, 153, 137, 84, 243, 94, 232];
 const MINT_WITH_USDC_DISC: [u8; 8] = [128, 28, 133, 173, 71, 142, 185, 206];
 const REDEEM_FOR_USDC_DISC: [u8; 8] = [150, 9, 215, 220, 255, 157, 74, 78];
+const MINT_PT_WITH_ATTESTATION_DISC: [u8; 8] = [107, 162, 212, 214, 182, 25, 85, 101];
+const REDEEM_PT_WITH_ATTESTATION_DISC: [u8; 8] = [178, 7, 83, 92, 186, 88, 70, 225];
 const SIDE_BUY: u8 = 0x30;
 const SIDE_SELL: u8 = 0x31;
 
@@ -98,21 +108,53 @@ impl TryFrom<&webhook_api::responses::FlashFill> for Attestation {
     }
 }
 
+/// The two token families the Ondo GM program mints and redeems against an attestation. They
+/// share the attestation digest and the per-mint PDAs, but not the instruction, the mint
+/// authority ([`gm_mint_authority`], [`portfolio_mint_authority`]) or the attestation signer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OndoProduct {
+    /// Single-stock Global Markets tokens: `mint_with_usdc` / `redeem_for_usdc`.
+    Gm,
+    /// Portfolio Tokens (baskets such as MAG7Xon): `mint_pt_with_attestation` /
+    /// `redeem_pt_with_attestation`.
+    Portfolio,
+}
+
+impl OndoProduct {
+    /// Ondo's mainnet attestation signer for this product.
+    pub fn mainnet_signer(self) -> [u8; 20] {
+        match self {
+            Self::Gm => ONDO_ATTESTATION_SIGNER,
+            Self::Portfolio => ONDO_PT_ATTESTATION_SIGNER,
+        }
+    }
+}
+
 /// Everything the builder and the validator agree on for one flash fill. The USDC borrowed and
 /// repaid is not in here: it is the fill's USDC leg, see [`usdc_leg`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlashFillExpectation {
     pub attestation: Attestation,
+    pub product: OndoProduct,
     pub attestation_signer: [u8; 20],
     pub chain_id: Pubkey,
 }
 
 impl FlashFillExpectation {
-    pub fn mainnet(attestation: Attestation) -> Self {
+    pub fn mainnet(product: OndoProduct, attestation: Attestation) -> Self {
         Self {
             attestation,
-            attestation_signer: ONDO_ATTESTATION_SIGNER,
+            product,
+            attestation_signer: product.mainnet_signer(),
             chain_id: MAINNET_CHAIN_ID,
+        }
+    }
+
+    /// The Ondo mint or redeem the attestation authorises for `user` and `mint`.
+    fn ondo_ix(&self, user: &Pubkey, mint: &Pubkey) -> Instruction {
+        match self.product {
+            OndoProduct::Gm => ondo_usdc_swap_ix(user, mint, &self.attestation),
+            OndoProduct::Portfolio => ondo_pt_usdc_swap_ix(user, mint, &self.attestation),
         }
     }
 }
@@ -196,6 +238,12 @@ pub fn usdon_manager_state() -> Pubkey {
 pub fn gmtoken_manager_state() -> Pubkey {
     pda(&[b"gmtoken_manager"], &ONDO_GM_PROGRAM)
 }
+pub fn portfolio_mint_authority() -> Pubkey {
+    pda(&[b"portfolio_mint_authority"], &ONDO_GM_PROGRAM)
+}
+pub fn portfolio_token_manager() -> Pubkey {
+    pda(&[b"portfolio_token_manager"], &ONDO_GM_PROGRAM)
+}
 pub fn gm_event_authority() -> Pubkey {
     pda(&[b"__event_authority"], &ONDO_GM_PROGRAM)
 }
@@ -245,18 +293,24 @@ pub fn flashloan_payback_ix(signer: &Pubkey, mint: &Pubkey, amount: u64) -> Inst
     flashloan_ix(FLASHLOAN_PAYBACK_DISC, signer, mint, amount)
 }
 
-/// `mint_with_usdc` or `redeem_for_usdc`, depending on the attestation side. Both take the same
-/// 25 accounts.
-pub fn ondo_usdc_swap_ix(user: &Pubkey, gm_mint: &Pubkey, att: &Attestation) -> Instruction {
-    let disc = match att.side {
-        FlashSide::Mint => MINT_WITH_USDC_DISC,
-        FlashSide::Redeem => REDEEM_FOR_USDC_DISC,
-    };
-    let mut data = disc.to_vec();
+/// The side's discriminator, then the attestation: both Ondo instruction pairs take the same args.
+fn ondo_data(att: &Attestation, mint_disc: [u8; 8], redeem_disc: [u8; 8]) -> Vec<u8> {
+    let mut data = match att.side {
+        FlashSide::Mint => mint_disc,
+        FlashSide::Redeem => redeem_disc,
+    }
+    .to_vec();
     data.extend_from_slice(&att.id);
     data.extend_from_slice(&att.price.to_le_bytes());
     data.extend_from_slice(&att.amount.to_le_bytes());
     data.extend_from_slice(&att.expiration.to_le_bytes());
+    data
+}
+
+/// `mint_with_usdc` or `redeem_for_usdc`, depending on the attestation side. Both take the same
+/// 25 accounts.
+pub fn ondo_usdc_swap_ix(user: &Pubkey, gm_mint: &Pubkey, att: &Attestation) -> Instruction {
+    let data = ondo_data(att, MINT_WITH_USDC_DISC, REDEEM_FOR_USDC_DISC);
     let manager = usdon_manager_state();
     Instruction {
         program_id: ONDO_GM_PROGRAM,
@@ -288,6 +342,45 @@ pub fn ondo_usdc_swap_ix(user: &Pubkey, gm_mint: &Pubkey, att: &Attestation) -> 
             AccountMeta::new_readonly(ONDO_GM_PROGRAM, false),
         ],
         data,
+    }
+}
+
+/// `mint_pt_with_attestation` or `redeem_pt_with_attestation`, the Portfolio Token twins of
+/// [`ondo_usdc_swap_ix`]: same data, 22 accounts. USDC only (no USDon accounts), the portfolio
+/// mint authority and `portfolio_token_manager`, and a read-only sanity check.
+pub fn ondo_pt_usdc_swap_ix(user: &Pubkey, pt_mint: &Pubkey, att: &Attestation) -> Instruction {
+    let manager = usdon_manager_state();
+    Instruction {
+        program_id: ONDO_GM_PROGRAM,
+        accounts: vec![
+            AccountMeta::new(*user, true),
+            AccountMeta::new(*pt_mint, false),
+            AccountMeta::new_readonly(portfolio_mint_authority(), false),
+            AccountMeta::new(ondo_user(user, pt_mint), false),
+            AccountMeta::new(token_limit(pt_mint), false),
+            AccountMeta::new_readonly(sanity_check(pt_mint), false),
+            AccountMeta::new(token_2022_ata(user, pt_mint), false),
+            AccountMeta::new(attestation_account(&att.id), false),
+            AccountMeta::new_readonly(whitelist(user), false),
+            AccountMeta::new_readonly(TOKEN_2022_PROGRAM, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM, false),
+            AccountMeta::new_readonly(ASSOCIATED_TOKEN_PROGRAM, false),
+            AccountMeta::new_readonly(TOKEN_PROGRAM, false),
+            AccountMeta::new_readonly(PYTH_USDC_PRICE_UPDATE, false),
+            AccountMeta::new(usdc_ata(&manager), false),
+            AccountMeta::new_readonly(USDC_MINT, false),
+            AccountMeta::new(usdc_ata(user), false),
+            AccountMeta::new_readonly(manager, false),
+            AccountMeta::new(portfolio_token_manager(), false),
+            AccountMeta::new_readonly(SYSVAR_INSTRUCTIONS, false),
+            AccountMeta::new_readonly(gm_event_authority(), false),
+            AccountMeta::new_readonly(ONDO_GM_PROGRAM, false),
+        ],
+        data: ondo_data(
+            att,
+            MINT_PT_WITH_ATTESTATION_DISC,
+            REDEEM_PT_WITH_ATTESTATION_DISC,
+        ),
     }
 }
 
@@ -402,7 +495,7 @@ pub fn wrap(
         &digest,
         out.len() as u8,
     ));
-    out.push(ondo_usdc_swap_ix(maker, gm_mint, att));
+    out.push(exp.ondo_ix(maker, gm_mint));
     out.extend(core);
     out.push(flashloan_payback_ix(maker, &USDC_MINT, leg));
     Ok(out)
@@ -414,7 +507,7 @@ pub fn message_uses_flash_loan(message: &solana_sdk::message::VersionedMessage) 
 }
 
 /// Accounts worth putting in an address lookup table: everything static across fills for these
-/// GM mints and makers.
+/// Ondo mints (GM or Portfolio Token) and makers.
 pub fn lookup_accounts(gm_mints: &[Pubkey], makers: &[Pubkey]) -> Vec<Pubkey> {
     let manager = usdon_manager_state();
     let mut keys = vec![
@@ -436,6 +529,8 @@ pub fn lookup_accounts(gm_mints: &[Pubkey], makers: &[Pubkey]) -> Vec<Pubkey> {
         gm_mint_authority(),
         manager,
         gmtoken_manager_state(),
+        portfolio_mint_authority(),
+        portfolio_token_manager(),
         gm_event_authority(),
         usdc_ata(&manager),
         token_2022_ata(&manager, &USDON_MINT),
@@ -529,7 +624,7 @@ impl FlashTracker {
             );
             record(&mut self.secp, index, "secp256k1 instruction")?;
         } else if program_id == ONDO_GM_PROGRAM {
-            let expected = ondo_usdc_swap_ix(&order.maker, &gm_mint, att);
+            let expected = exp.ondo_ix(&order.maker, &gm_mint);
             ensure!(
                 same_accounts(&ix.accounts, &expected.accounts),
                 "Ondo accounts differ from the maker's mint/redeem"
@@ -700,7 +795,7 @@ mod tests {
         );
         assert_eq!(
             recover_signer(&att, &digest).unwrap(),
-            ONDO_ATTESTATION_SIGNER
+            OndoProduct::Gm.mainnet_signer()
         );
         let mut wrong = att.clone();
         wrong.price += 1;
@@ -710,7 +805,7 @@ mod tests {
             ONDO_ATTESTATION_SIGNER
         );
         // It was instruction 3 in that transaction.
-        let ix = secp256k1_ix(&ONDO_ATTESTATION_SIGNER, &att, &digest, 3);
+        let ix = secp256k1_ix(&OndoProduct::Gm.mainnet_signer(), &att, &digest, 3);
         let expected = format!(
             "01{}{}{}{}",
             "200003" /* sig offset 32, ix 3 */.to_owned() + "0c0003" /* eth offset 12, ix 3 */ + "6100" /* msg offset 97 */ + "2000" /* msg len 32 */ + "03",
@@ -756,7 +851,125 @@ mod tests {
             signature: BASE64_STANDARD.encode(&sig65),
         };
         assert_eq!(Attestation::try_from(&wire).unwrap(), att);
-        assert_eq!(lookup_accounts(&[USDC_MINT], &[]).len(), 24);
+        assert_eq!(lookup_accounts(&[USDC_MINT], &[]).len(), 26);
+    }
+
+    /// Mainnet tx 37DR3ugVFK1zhcY8MPu3zDkeHRfmQQvtfuPPqrU9ZJqbCDFBDtJwJNkKNY3vBpBJUTU3PBsoSgPA3DGLDZTUTBtE
+    /// (mint_pt_with_attestation of YLD5on)
+    fn real_pt_mint() -> (Pubkey, Pubkey, Attestation) {
+        let user = pubkey!("49cX17nSJb6yGaYJw1xjXRHTw7v67MjXkiq3wRP8sRbe");
+        let mint = pubkey!("ofe6mC87qNGYgSr9Ps7wMVVSbUFvpcJDDxskPrqondo");
+        let sig = hex_vec("58dce184c3bb3b4f881cbb76f9dce23910ebde38d1fb7c8d6e91b85bfa8506352687045ebee08dc46d9994093fe40ddf15fb9f90088007e616d1d66a634b3556");
+        let att = Attestation {
+            id: hex16("70d9f74cedd64f92a29b079114b24d71"),
+            side: FlashSide::Mint,
+            price: 4_972_715_000,
+            amount: 20_988_534_432,
+            expiration: 1_794_848_796,
+            signature: sig.try_into().unwrap(),
+            recovery_id: 1,
+        };
+        (user, mint, att)
+    }
+
+    /// Mainnet tx 5q5pUAvtSkS5zcE4mWeKHhS2YqjT3bCFCtavuvSWtAKmHsV6T4EGiawQC2jbDQcGiwYBe9ZUkRqdRecW8kDia27K
+    /// (redeem_pt_with_attestation of SPYSHIELDon)
+    fn real_pt_redeem() -> (Pubkey, Pubkey, Attestation) {
+        let user = pubkey!("6J6ESRyAdJ9oUoeVs8GrVQz2DsupcGrueWEGjbQMneeU");
+        let mint = pubkey!("BYN1GKCoFEfJKY2B2C989aMoyeXXbLe2BQv1exeondo");
+        let sig = hex_vec("aa0a0c38b61981aeff106be052a4f078b73b35611a6e54e56c9db03e92be172d0264f878de5c992e822f3bf8cdcad44028232d585199c26210cee1f287c8cfce");
+        let att = Attestation {
+            id: hex16("a2c3e1b49a4d4b118341b63853f5895a"),
+            side: FlashSide::Redeem,
+            price: 99_987_272_000,
+            amount: 480_000_000,
+            expiration: 1_794_842_531,
+            signature: sig.try_into().unwrap(),
+            recovery_id: 1,
+        };
+        (user, mint, att)
+    }
+
+    #[test]
+    fn ondo_pt_accounts_match_mainnet_mint() {
+        let (user, mint, att) = real_pt_mint();
+        let expected = [
+            "49cX17nSJb6yGaYJw1xjXRHTw7v67MjXkiq3wRP8sRbe",
+            "ofe6mC87qNGYgSr9Ps7wMVVSbUFvpcJDDxskPrqondo",
+            "APvFN35cdJDJjVAHQGWi8ujanTBBzpqK433wr7hz8BER",
+            "8nEFq654EGABqSgjhaFbbkavYKocRtCVSAuoYFbKUMCi",
+            "6VTfzvU5TLamCDkfPExAnxA88j38E3x4hkLdzTi1yGPq",
+            "EW5xFW5dgTKUHhvHXafuZJbf5uA8h1RYK7avNDQwCH1u",
+            "Fj4vEHYqmxdHsMCmcLZejCKpv7cyNqAcnTJibQecSFKg",
+            "HjbaLA9mX6xksaSXNsggyaZpyZ83S4VBn9qbTF9b4nGn",
+            "YY3u9Y6fEacotxfv4KMzNeNRRW6xnY9cqTNzPcxk8fQ",
+            "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+            "11111111111111111111111111111111",
+            "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+            "Dpw1EAVrSB1ibxiDQyTAW6Zip3J4Btk2x4SgApQCeFbX",
+            "21MqWTzhM5BHykeXK264D8AQjwWrdi6vurbX4epaovPU",
+            "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "EiR6xbumwtdGc5PTixJZcHwoK4UQUdySF5JxASPPnKXK",
+            "CKW82CT7QtJUDkxCa6sSHZ3UXvUSu6EuGDXUtKyXgn67",
+            "GRXoCbbJdKpGLgcVvwkeypog1cEjKLXnyjKqzRjvbLPS",
+            "Sysvar1nstructions1111111111111111111111111",
+            "6ipdj6w8PRZqwESgGyDnmJr2vcwu51bKNFk7yd2K96Bz",
+            "XzTT4XB8m7sLD2xi6snefSasaswsKCxx5Tifjondogm",
+        ];
+        let ix = ondo_pt_usdc_swap_ix(&user, &mint, &att);
+        let actual: Vec<String> = ix.accounts.iter().map(|a| a.pubkey.to_string()).collect();
+        assert_eq!(actual, expected);
+        // Writable as in that transaction; unlike the GM pair, the sanity check is read-only.
+        let writable: Vec<usize> = (0..ix.accounts.len())
+            .filter(|&i| ix.accounts[i].is_writable)
+            .collect();
+        assert_eq!(writable, [0, 1, 3, 4, 6, 7, 14, 16, 18]);
+        assert_eq!(
+            ix.data,
+            hex_vec("6ba2d4d6b619556570d9f74cedd64f92a29b079114b24d71f89b652801000000a09e03e3040000001c38fb6a00000000")
+        );
+        let (user, mint, redeem) = real_pt_redeem();
+        assert_eq!(
+            ondo_pt_usdc_swap_ix(&user, &mint, &redeem).data,
+            hex_vec("b207535cba5846e1a2c3e1b49a4d4b118341b63853f5895a40b1b4471700000000389c1c00000000a31ffb6a00000000")
+        );
+    }
+
+    #[test]
+    fn pt_digest_and_secp_instruction_match_mainnet() {
+        // Same digest as the GM pair, signed by the Portfolio Token signer.
+        let (user, mint, att) = real_pt_mint();
+        let digest = attestation_digest(&MAINNET_CHAIN_ID, &att, &user, &mint);
+        assert_eq!(
+            hex_vec("7b64b3e20ebd174367a488278486f2da1ccdb1feef5d745aaeec3821418d3667"),
+            digest
+        );
+        assert_eq!(
+            recover_signer(&att, &digest).unwrap(),
+            OndoProduct::Portfolio.mainnet_signer()
+        );
+        // It was instruction 2 in that transaction.
+        let ix = secp256k1_ix(&OndoProduct::Portfolio.mainnet_signer(), &att, &digest, 2);
+        let expected = format!(
+            "{}{}{}{}",
+            "012000020c00026100200002",
+            "ad228f9d838368466a5674290aece8673c6a16c6",
+            "58dce184c3bb3b4f881cbb76f9dce23910ebde38d1fb7c8d6e91b85bfa8506352687045ebee08dc46d9994093fe40ddf15fb9f90088007e616d1d66a634b355601",
+            "7b64b3e20ebd174367a488278486f2da1ccdb1feef5d745aaeec3821418d3667"
+        );
+        assert_eq!(ix.data, hex_vec(&expected));
+
+        let (user, mint, redeem) = real_pt_redeem();
+        let digest = attestation_digest(&MAINNET_CHAIN_ID, &redeem, &user, &mint);
+        assert_eq!(
+            hex_vec("53cded547d4b8a1e9f4f9cc385e7b4d36c8ac91e1ce7191db4a103701bc20836"),
+            digest
+        );
+        assert_eq!(
+            recover_signer(&redeem, &digest).unwrap(),
+            OndoProduct::Portfolio.mainnet_signer()
+        );
     }
 
     #[test]
@@ -818,6 +1031,11 @@ mod tests {
 
     #[test]
     fn wraps_and_validates_both_sides() {
+        wraps_and_validates(OndoProduct::Gm, real_mint());
+        wraps_and_validates(OndoProduct::Portfolio, real_pt_mint());
+    }
+
+    fn wraps_and_validates(product: OndoProduct, (_, gm_mint, att): (Pubkey, Pubkey, Attestation)) {
         use crate::fill::{
             validate_fill_sanitized_message, validate_flash_fill_sanitized_message, Order,
         };
@@ -825,7 +1043,6 @@ mod tests {
 
         let maker = Pubkey::new_unique();
         let taker = Pubkey::new_unique();
-        let (_, gm_mint, att) = real_mint();
         let order = |in_amount, input_mint, out_amount, output_mint, expire_at| Order {
             taker,
             maker,
@@ -851,7 +1068,7 @@ mod tests {
         // Mint side: taker pays 5 USDC and receives the minted amount minus Jupiter's fee.
         let expire_at = att.expiration - 5;
         let ok = || order(5_000_000, USDC_MINT, att.amount - 1, gm_mint, expire_at);
-        let exp = FlashFillExpectation::mainnet(att.clone());
+        let exp = FlashFillExpectation::mainnet(product, att.clone());
         let ixs = wrapped(&ok(), &exp);
         // The borrow and the payback are the 5 USDC the taker pays.
         assert_eq!(ixs[2], flashloan_borrow_ix(&maker, &USDC_MINT, 5_000_000));
@@ -873,6 +1090,16 @@ mod tests {
         assert_eq!(validated.compute_unit_limit, 600_000);
         // The plain validator still refuses the wrapper.
         assert!(validate_fill_sanitized_message(&msg, ok()).is_err());
+        // So does the other product's expectation: its Ondo instruction, or its signer alone.
+        let mut other = exp.clone();
+        other.product = match product {
+            OndoProduct::Gm => OndoProduct::Portfolio,
+            OndoProduct::Portfolio => OndoProduct::Gm,
+        };
+        assert!(validate_flash_fill_sanitized_message(&msg, ok(), &other).is_err());
+        let mut other_signer = exp.clone();
+        other_signer.attestation_signer = other.product.mainnet_signer();
+        assert!(validate_flash_fill_sanitized_message(&msg, ok(), &other_signer).is_err());
         // A borrow other than the USDC leg, amounts other than the fill's, a fill outliving the
         // attestation, a missing payback.
         let mut over_borrow = ixs.clone();
@@ -895,7 +1122,7 @@ mod tests {
         let mut redeem = att.clone();
         redeem.side = FlashSide::Redeem;
         let redeem_order = || order(redeem.amount, gm_mint, 4_900_000, USDC_MINT, expire_at);
-        let exp = FlashFillExpectation::mainnet(redeem.clone());
+        let exp = FlashFillExpectation::mainnet(product, redeem.clone());
         let ixs = wrapped(&redeem_order(), &exp);
         // The borrow and the payback are the 4.9 USDC the taker receives.
         assert_eq!(ixs[2], flashloan_borrow_ix(&maker, &USDC_MINT, 4_900_000));
