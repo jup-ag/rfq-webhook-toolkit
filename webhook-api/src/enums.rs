@@ -39,6 +39,12 @@ pub enum RejectionReason {
     InsufficientBalance,
     InsufficientBalanceForAtaCreation,
     SignatureVerificationFailed,
+    /// Your simulation of the signed transaction failed; put its error in `rejection_reason`.
+    /// Jupiter re-simulates the fill where it can, and still counts the rejection against you
+    /// when the fill simulates fine, its blockhash or expiry has passed by the time Jupiter
+    /// checks, or the maker caused the failure. Use `InsufficientBalance` or
+    /// `InsufficientBalanceForAtaCreation` when the taker is short.
+    SimulationFailed,
     #[default]
     BotActivityDetected,
 }
@@ -95,6 +101,13 @@ mod tests {
         let bot_activity_json = serde_json::to_string(&bot_activity).unwrap();
         println!("BotActivityDetected serialized: {}", bot_activity_json);
 
+        let simulation_failed = SwapState::RejectedWithReason(RejectionReason::SimulationFailed);
+        let simulation_failed_json = serde_json::to_string(&simulation_failed).unwrap();
+        assert_eq!(
+            simulation_failed_json,
+            r#"{"rejectedWithReason":"simulationFailed"}"#
+        );
+
         // Test deserialization
         let deserialized_insufficient: SwapState =
             serde_json::from_str(&insufficient_balance_json).unwrap();
@@ -111,6 +124,10 @@ mod tests {
         let deserialized_bot_activity: SwapState =
             serde_json::from_str(&bot_activity_json).unwrap();
         assert_eq!(deserialized_bot_activity, bot_activity);
+
+        let deserialized_simulation_failed: SwapState =
+            serde_json::from_str(&simulation_failed_json).unwrap();
+        assert_eq!(deserialized_simulation_failed, simulation_failed);
     }
 
     #[test]
@@ -137,6 +154,12 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&bot_activity).unwrap(),
             "\"botActivityDetected\""
+        );
+
+        let simulation_failed = RejectionReason::SimulationFailed;
+        assert_eq!(
+            serde_json::to_string(&simulation_failed).unwrap(),
+            "\"simulationFailed\""
         );
     }
 }
