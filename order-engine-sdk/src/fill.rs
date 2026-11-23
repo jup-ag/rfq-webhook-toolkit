@@ -1,3 +1,4 @@
+use crate::flash_fill::{FlashFillExpectation, FlashTracker};
 use crate::order_engine;
 use anchor_lang::{pubkey, AnchorDeserialize, Discriminator};
 use anchor_spl::{
@@ -63,6 +64,26 @@ pub fn validate_fill_sanitized_message(
     sanitized_message: &SanitizedMessage,
     order: Order,
 ) -> Result<ValidatedFill> {
+    validate_fill_inner(sanitized_message, order, None)
+}
+
+/// Like [`validate_fill_sanitized_message`], additionally allowing exactly the flash-loan and
+/// Ondo instructions described by `flash` (see [`crate::flash_fill`]) around the fill.
+pub fn validate_flash_fill_sanitized_message(
+    sanitized_message: &SanitizedMessage,
+    order: Order,
+    flash: &FlashFillExpectation,
+) -> Result<ValidatedFill> {
+    validate_fill_inner(sanitized_message, order, Some(flash))
+}
+
+fn validate_fill_inner(
+    sanitized_message: &SanitizedMessage,
+    order: Order,
+    flash: Option<&FlashFillExpectation>,
+) -> Result<ValidatedFill> {
+    let mut flash_tracker = FlashTracker::default();
+    let mut fill_index = None;
     let fee_payer = sanitized_message.fee_payer();
     ensure!(
         fee_payer == &order.maker,
@@ -90,7 +111,6 @@ pub fn validate_fill_sanitized_message(
 
     let expected_receiver = order.receiver.filter(|r| r != &order.taker);
     let expected_integrator = order.integrator_fee.as_ref();
-    let mut fill_ix_found = false;
     let mut receiver_transfer_found = false;
     let mut integrator_fee_validated = false;
     let mut integrator_used_native_path = false;
@@ -99,12 +119,16 @@ pub fn validate_fill_sanitized_message(
     let mut compute_unit_price = None;
     let mut fill_extracted: Option<FillExtracted> = None;
 
-    for BorrowedInstruction {
-        program_id,
-        accounts,
-        data,
-    } in sanitized_message.decompile_instructions()
+    for (index, instruction) in sanitized_message
+        .decompile_instructions()
+        .into_iter()
+        .enumerate()
     {
+        let BorrowedInstruction {
+            program_id,
+            ref accounts,
+            data,
+        } = instruction;
         if program_id == &compute_budget::ID {
             // Compute budget should have been driven from the fee payer, certainly need to validate
             let compute_budget_ix = try_from_slice_unchecked::<ComputeBudgetInstruction>(data)?;
@@ -131,8 +155,8 @@ pub fn validate_fill_sanitized_message(
             // We verify the taker is paying for the token account
             ensure!(accounts.first().map(|am| am.pubkey) != Some(&order.maker));
         } else if program_id == &order_engine::ID {
-            ensure!(!fill_ix_found, "Duplicated fill instruction");
-            fill_ix_found = true;
+            ensure!(fill_index.is_none(), "Duplicated fill instruction");
+            fill_index = Some(index);
 
             ensure!(data.len() >= 8, "Not enough data in fill instruction");
             // Must slice off anchor's discriminator first
@@ -142,7 +166,7 @@ pub fn validate_fill_sanitized_message(
                 "Not a fill discriminator"
             );
 
-            let pubkeys = accounts.into_iter().map(|a| *a.pubkey).collect::<Vec<_>>();
+            let pubkeys = accounts.iter().map(|a| *a.pubkey).collect::<Vec<_>>();
             let [taker, maker, _taker_input_mint_token_account, _maker_input_mint_token_account, taker_output_mint_token_account, _maker_output_mint_token_account, input_mint, _input_token_program, output_mint, output_token_program, ..] =
                 pubkeys.as_slice()
             else {
@@ -322,12 +346,22 @@ pub fn validate_fill_sanitized_message(
                     bail!("Only transfer_checked or sync_native are allowed from the token program")
                 }
             }
+        } else if let Some(flash) = flash {
+            flash_tracker.observe(index, &instruction, flash, &order)?;
         } else {
             bail!("Unexpected program id {program_id}");
         }
     }
 
-    ensure!(fill_ix_found, "Missing fill instruction");
+    let fill_index = fill_index.context("Missing fill instruction")?;
+    if let Some(flash) = flash {
+        flash_tracker.finish(
+            fill_index,
+            sanitized_message.instructions().len(),
+            flash,
+            &order,
+        )?;
+    }
     ensure!(
         receiver_transfer_found || expected_receiver.is_none(),
         "Missing transfer instruction for receiver"

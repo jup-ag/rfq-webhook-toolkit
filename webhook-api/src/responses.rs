@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::enums::{Protocol, QuoteType, SwapState};
+use crate::enums::{FlashSide, Protocol, QuoteType, SwapState};
 
 /// Response to a quote request from the Market Maker
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
@@ -43,6 +43,36 @@ pub struct QuoteResponse {
     #[schema(examples("internal", "integrator"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Present when the maker has no inventory and asks the RFQ to wrap the fill in a
+    /// Jupiter Lend flash loan plus an Ondo GM mint/redeem backed by this attestation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flash_fill: Option<FlashFill>,
+}
+
+/// An Ondo GM attestation the maker obtained for exactly this quote. The RFQ wraps the fill in a
+/// Jupiter Lend flash loan of the fill's USDC leg (what the taker pays when minting, what the
+/// taker receives when redeeming) and the Ondo mint or redeem this attestation authorises.
+/// Attestations are valid for at most 30 s on-chain; the RFQ shortens the fill's expiry to match.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FlashFill {
+    /// `attestationId` from Ondo's `POST /v1/attestations`: a decimal u128, which is the 16 bytes
+    /// the program takes, big-endian
+    #[schema(examples("320578568903735945052344740413286053339"))]
+    pub attestation_id: String,
+    #[schema(examples("mint"))]
+    pub side: FlashSide,
+    /// USD per GM token scaled by 1e9, as signed (Ondo returns it scaled by 1e18)
+    #[schema(examples("15457725000"))]
+    pub price: String,
+    /// GM token amount in base units (9 decimals), as signed (Ondo returns it scaled by 1e18)
+    #[schema(examples("323121628"))]
+    pub amount: String,
+    /// Unix seconds; the fill's `expire_at` must not exceed it
+    #[schema(examples("1790071881"))]
+    pub expiration: i64,
+    /// Base64 secp256k1 signature over the attestation digest, 65 bytes (r || s || v)
+    pub signature: String,
 }
 
 /// Response to a swap request to the Market Maker
